@@ -9,15 +9,9 @@ out vec4 OutColor;
 
 const vec2 VertexPositions[4] = vec2[4](
   vec2(0.0, 0.0),
-  // vec2(1.0, 0.0),
-  // vec2(1.0, 1.0),
-  // vec2(0.0, 1.0)
-  // vec2(0.8, 0.0),
-  // vec2(0.8, 0.8),
-  // vec2(0.0, 0.8)
-  vec2(0.75, 0.0),
-  vec2(0.75, 0.75),
-  vec2(0.0, 0.75)
+  vec2(0.8, 0.0),
+  vec2(0.8, 0.8),
+  vec2(0.0, 0.8)
 );
 
 void main()

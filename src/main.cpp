@@ -21,7 +21,7 @@
 struct GContext
 {
   static constexpr i32 width = 3840, height = 2160;
-  static constexpr i32 cellside = 2;
+  static constexpr i32 cellside = 6;
   static constexpr i32 gridWidth = width / cellside;
   static constexpr i32 gridHeight = height / cellside;
   static constexpr bool high_dpi = true;
@@ -98,7 +98,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   glVertexAttribPointer(0, 1, GL_BYTE, false, sizeof(i8), 0);
   glVertexAttribDivisor(0, 1);
 
-  glClearColor(0, 0, 0, 1);
+  glClearColor(0, 0.025, 0.05, 1);
   return SDL_APP_CONTINUE;
 }
 
