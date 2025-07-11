@@ -22,6 +22,9 @@ void main()
     case 1:
       OutColor = vec4(1, 1, 1, 1);
       break;
+    case 0:
+      OutColor = vec4(0, 0.0125, 0.1, 1);
+      break;
     default:
       OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
       break;

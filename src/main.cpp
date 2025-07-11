@@ -14,14 +14,17 @@
 
 #include "Array.hpp"
 #include "ShaderProgram.hpp"
+#include "Clock.hpp"
+
+#define RAND_CHANCE 12
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
 struct GContext
 {
-  static constexpr i32 width = 3840, height = 2160;
-  static constexpr i32 cellside = 6;
+  static constexpr i32 width = 1440, height = 900;
+  static constexpr i32 cellside = 1;
   static constexpr i32 gridWidth = width / cellside;
   static constexpr i32 gridHeight = height / cellside;
   static constexpr bool high_dpi = true;
@@ -44,9 +47,12 @@ struct GContext
     current_cells = next_cells;
     next_cells = temp;
   }
+  bool space_state[2] = {}, reset_state[2] = {}, step_state[2] = {};
 };
 
 void updateCamera(GContext* cam);
+
+void reset_cells(GContext::array_t& cells, unsigned int seed = std::time(nullptr));
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 {
@@ -55,13 +61,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   *appstate = context;
 
   // GContext* context = (GContext*)(*appstate);
-  for (auto& cell : *context->current_cells) {
-    if (rand() % 6 == 3) {
-      cell = 1;
-    } else {
-      cell = 0;
-    }
-  }
+  reset_cells(*context->current_cells);
 
   SDL_Init(SDL_INIT_VIDEO);
   bool const* keyboard = SDL_GetKeyboardState(nullptr);
@@ -98,7 +98,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   glVertexAttribPointer(0, 1, GL_BYTE, false, sizeof(i8), 0);
   glVertexAttribDivisor(0, 1);
 
-  glClearColor(0, 0.025, 0.05, 1);
+  glClearColor(0.0, 0.025, 0.2, 1);
   return SDL_APP_CONTINUE;
 }
 
@@ -120,6 +120,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
   GContext* context = (GContext*)appstate;
+  static math::Time begin = 0_sec;
 
   auto calculateNext = [&](GContext::array_t const& current_cells, GContext::array_t& next_cells) {
     const int gridWidth  = context->width  / context->cellside;
@@ -260,37 +261,68 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     }
   };
 
-  bool const* keyboard = SDL_GetKeyboardState(nullptr);
+  static bool const* keyboard = SDL_GetKeyboardState(nullptr);
+  static bool updating = true;
+  bool* space = context->space_state;
+  space[0] = space[1];
+  space[1] = keyboard[SDL_SCANCODE_SPACE];
+  if (space[1] && !space[0]) {
+    updating = !updating;
+  }
 
-    f32 zoomF = 0;
-    math::vec2 camVel;
-    static constexpr f32 CamSpeed = 50;
-    static constexpr f32 Delta = 1.f / 60.f;
-    if (keyboard[SDL_SCANCODE_K]) zoomF += 2;
-    if (keyboard[SDL_SCANCODE_J]) zoomF -= 2;
-    if (keyboard[SDL_SCANCODE_D]) camVel.x += 1;
-    if (keyboard[SDL_SCANCODE_A]) camVel.x -= 1;
-    if (keyboard[SDL_SCANCODE_S]) camVel.y += 1;
-    if (keyboard[SDL_SCANCODE_W]) camVel.y -= 1;
-    if (zoomF != 0 || !math::isZero(camVel)) {
-      context->camera.zoom *= (1 + zoomF * context->pixel_density / 1000.f);
-      context->camera.target += camVel * context->pixel_density * CamSpeed * Delta;
-      updateCamera(context);
-    }
+  bool* reset = context->reset_state;
+  reset[0] = reset[1];
+  reset[1] = keyboard[SDL_SCANCODE_R];
 
-    // update here
+  if (reset[1] && !reset[0]) {
+    reset_cells(*context->current_cells, 5);
+  }
+
+  bool* step = context->step_state;
+  step[0] = step[1];
+  step[1] = keyboard[SDL_SCANCODE_E];
+
+  if ((step[1] && ! step[0]) || keyboard[SDL_SCANCODE_Q]) {
+    updating = false;
     calculateNext(*context->current_cells, *context->next_cells);
-    // -----------------------------------
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glBindVertexArray(context->VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, context->VBO);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, context->current_cells->ByteCapacity(), context->current_cells->data());
-    glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, context->current_cells->size());
-
-    SDL_GL_SwapWindow(context->window);
     context->swap_cells();
-    // SDL_Delay(16);
+  }
+
+  f32 zoomF = 0;
+  math::vec2 camVel;
+  static constexpr f64 FPS = 60.0;
+  static constexpr f32 CamSpeed = 50;
+  static constexpr math::Time Delta = math::seconds(1.0 / FPS);
+  if (keyboard[SDL_SCANCODE_K]) zoomF += 2;
+  if (keyboard[SDL_SCANCODE_J]) zoomF -= 2;
+  if (keyboard[SDL_SCANCODE_D]) camVel.x += 1;
+  if (keyboard[SDL_SCANCODE_A]) camVel.x -= 1;
+  if (keyboard[SDL_SCANCODE_S]) camVel.y += 1;
+  if (keyboard[SDL_SCANCODE_W]) camVel.y -= 1;
+  if (zoomF != 0 || !math::isZero(camVel)) {
+    context->camera.zoom *= (1 + zoomF * context->pixel_density * Delta.asMilliseconds() / 4000.f);
+    context->camera.target += camVel * context->pixel_density * CamSpeed * Delta.asSeconds();
+    updateCamera(context);
+  }
+
+  // update here
+  if (updating)
+    calculateNext(*context->current_cells, *context->next_cells);
+  // -----------------------------------
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  glBindVertexArray(context->VAO);
+  glBindBuffer(GL_ARRAY_BUFFER, context->VBO);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, context->current_cells->ByteCapacity(), context->current_cells->data());
+  glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, context->current_cells->size());
+
+  SDL_GL_SwapWindow(context->window);
+  if (updating)
+    context->swap_cells();
+  auto elapsed = math::Clock::Now() - begin;
+  if (elapsed < Delta)
+    SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
+  begin = math::Clock::Now();
 
   return SDL_APP_CONTINUE;
 }
@@ -332,3 +364,14 @@ void updateCamera(GContext* context)
   // glViewport(target.x, target.y, view_size.x, view_size.y);
 }
 
+void reset_cells(GContext::array_t& cells, unsigned int seed) {
+
+  srand(seed);
+  for (auto& cell : cells) {
+    if (rand() % RAND_CHANCE == 3) {
+      cell = 1;
+    } else {
+      cell = 0;
+    }
+  }
+}
