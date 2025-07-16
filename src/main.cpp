@@ -23,16 +23,18 @@
 
 struct GContext
 {
-  static constexpr i32 width = 1440, height = 900;
+  static constexpr i32 Width = 1920 * 2, Height = 1080 * 2;
   static constexpr i32 cellside = 1;
-  static constexpr i32 gridWidth = width / cellside;
-  static constexpr i32 gridHeight = height / cellside;
+  static constexpr i32 gridWidth = Width / cellside;
+  static constexpr i32 gridHeight = Height / cellside;
   static constexpr bool high_dpi = true;
+  f32 current_width, current_height;
   math::mat4 projection;
+  math::mat4 currentProjection;
   f32 pixel_density;
   struct Camera {
     f32 zoom = 1;
-    math::vec2 target = math::vec2(width, height) / 2.f;
+    math::vec2 target = math::vec2(Width, Height) / 2.f;
   } camera;
   SDL_Window* window;
   ShaderProgram program;
@@ -51,6 +53,7 @@ struct GContext
 };
 
 void updateCamera(GContext* cam);
+void handleResize(GContext* context);
 
 void reset_cells(GContext::array_t& cells, unsigned int seed = std::time(nullptr));
 
@@ -68,7 +71,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
   context->window = SDL_CreateWindow(
       "Test",
-      GContext::width, GContext::height,
+      GContext::Width, GContext::Height,
       SDL_WINDOW_OPENGL
       | (GContext::high_dpi ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0)
       // | SDL_WINDOW_FULLSCREEN
@@ -86,6 +89,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   });
 
   context->projection = math::mat4::ortho(0, GContext::gridWidth, 0, GContext::gridHeight, -10, 10);
+  context->currentProjection = context->projection;
   context->program.use().set("projection", context->projection);
   context->program.use().set("gridSize", math::vec2(GContext::gridWidth, GContext::gridHeight));
 
@@ -99,11 +103,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   glVertexAttribDivisor(0, 1);
 
   glClearColor(0.0, 0.025, 0.2, 1);
+  handleResize(context);
   return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 {
+  GContext* context = (GContext*)appstate;
   switch (event->type)
   {
     case SDL_EVENT_QUIT:
@@ -111,6 +117,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
     case SDL_EVENT_KEY_DOWN:
       if (event->key.key == SDLK_ESCAPE)
         return SDL_APP_SUCCESS;
+    case SDL_EVENT_WINDOW_RESIZED:
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+      handleResize(context);
     default:
       break;
   }
@@ -123,8 +132,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   static math::Time begin = 0_sec;
 
   auto calculateNext = [&](GContext::array_t const& current_cells, GContext::array_t& next_cells) {
-    const int gridWidth  = context->width  / context->cellside;
-    const int gridHeight = context->height / context->cellside;
+    const int gridWidth  = GContext::Width  / context->cellside;
+    const int gridHeight = GContext::Height / context->cellside;
     std::fill(next_cells.begin(), next_cells.end(), 0);
     for (auto y = 0; y < gridHeight - 1; ++y) {
       for (auto x = 0; x < gridWidth; ++x) {
@@ -288,9 +297,23 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     context->swap_cells();
   }
 
+  auto mouseToNormal = context->projection;
+  math::vec3 mousepos {};
+  auto state = SDL_GetMouseState(&mousepos.x, &mousepos.y);
+  static bool last_time, this_time;
+  last_time = this_time;
+  this_time = (state & SDL_BUTTON_LMASK) != 0;
+  mousepos = mouseToNormal.transform(mousepos);
+  mousepos = context->currentProjection.inverse().transform(mousepos);
+  if (this_time && !last_time) {
+    u32 i = floor(mousepos.x) + floor(mousepos.y) * GContext::Width;
+    auto& clicked_cell = (*context->current_cells)[i];
+    clicked_cell = clicked_cell == 1 ? 0 : 1;
+  }
+
   f32 zoomF = 0;
   math::vec2 camVel;
-  static constexpr f64 FPS = 60.0;
+  static constexpr f64 FPS = 15.0;
   static constexpr f32 CamSpeed = 50;
   static constexpr math::Time Delta = math::seconds(1.0 / FPS);
   if (keyboard[SDL_SCANCODE_K]) zoomF += 2;
@@ -339,12 +362,13 @@ void updateCamera(GContext* context)
 {
   context->camera.zoom = math::clamp(context->camera.zoom, 1.f, 30.f);
 
-  math::vec2 orig_size = math::vec2(GContext::gridWidth, GContext::gridHeight);// * context->pixel_density;
+  math::vec2 orig_size = math::vec2(GContext::Width, GContext::Height);// * context->pixel_density;
   math::vec2 orig_half_size = orig_size / 2.f;
-  math::vec2 view_size = orig_size * context->camera.zoom;
+  math::vec2 current_size {context->current_width, context->current_height};
+  math::vec2 view_size = current_size / context->camera.zoom;
   math::vec2 view_half_size = view_size / 2.f;
 
-  math::vec2 view_half_size_in_world = orig_size / (context->camera.zoom * 2.f);
+  math::vec2 view_half_size_in_world = view_size / (context->camera.zoom * 2.f);
 
   context->camera.target.x = std::clamp(context->camera.target.x, view_half_size_in_world.x, orig_size.x - view_half_size_in_world.x);
   context->camera.target.y = std::clamp(context->camera.target.y, view_half_size_in_world.y, orig_size.y - view_half_size_in_world.y);
@@ -360,6 +384,7 @@ void updateCamera(GContext* context)
       );
 
   context->program.set("projection", projection);
+  context->currentProjection = projection;
 
   // glViewport(target.x, target.y, view_size.x, view_size.y);
 }
@@ -374,4 +399,18 @@ void reset_cells(GContext::array_t& cells, unsigned int seed) {
       cell = 0;
     }
   }
+}
+
+void handleResize(GContext* context)
+{
+  i32 width, height;
+  SDL_GetWindowSize(context->window, &width, &height);
+  context->projection = math::mat4::ortho(
+      0, width,
+      0, height,
+      -10, 10
+      );
+  context->current_width = width;
+  context->current_height = height;
+  updateCamera(context);
 }
