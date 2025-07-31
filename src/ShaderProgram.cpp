@@ -80,6 +80,22 @@ bool hasFailed(GLuint name)
   return result == 0;
 }
 
+GLuint loadShaderFromString(GLenum type, std::string_view source_view)
+{
+  GLuint shader = glCreateShader(type);
+  char const* source = source_view.data();
+  glShaderSource(shader, 1, &source, 0);
+  glCompileShader(shader);
+  if (hasFailed<StatusFor::Shader>(shader))
+  {
+    log::println("Failed to compile {} shader with source\n{}\n error: {}",
+        priv::getShaderStr(type),
+        source_view.data(),
+        getInfoLog<StatusFor::Shader>(shader));
+  }
+  return shader;
+}
+
 GLuint loadShader(GLenum type, std::string_view filename)
 {
   GLuint shader = glCreateShader(type);
@@ -102,6 +118,27 @@ GLuint loadShader(GLenum type, std::string_view filename)
 }
 
 } // namespace priv
+
+void ShaderProgram::loadProgramFromString(std::vector<std::pair<GLenum, std::string_view>> shaderList)
+{
+  id = glCreateProgram();
+  std::vector<GLuint> loadedShaders;
+  for (auto& [type, source_view] : shaderList)
+  {
+    auto shader = priv::loadShaderFromString(type, source_view);
+    glAttachShader(id, shader);
+    loadedShaders.push_back(shader);
+  }
+
+  glLinkProgram(id);
+  if (priv::hasFailed<priv::StatusFor::Program>(id))
+  {
+    log::println("Failed to link program: {}",
+        priv::getInfoLog<priv::StatusFor::Program>(id));
+  }
+  for (auto& shader : loadedShaders)
+    glDeleteShader(shader);
+}
 
 void ShaderProgram::loadProgram(std::vector<std::pair<GLenum, std::string_view>> shaderList)
 {

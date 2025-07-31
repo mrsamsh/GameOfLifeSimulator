@@ -22,6 +22,7 @@ class ShaderProgram
 {
 public:
   void loadProgram(std::vector<std::pair<GLenum, std::string_view>> shaderList);
+  void loadProgramFromString(std::vector<std::pair<GLenum, std::string_view>> shaderList);
   ShaderProgram& use();
   GLuint name() const;
 
