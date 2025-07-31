@@ -10,7 +10,6 @@
 #include <glad/glad.h>
 #include <Math.hpp>
 #include <MathPrint.hpp>
-#include <print>
 
 #include "Array.hpp"
 #include "ShaderProgram.hpp"
@@ -25,11 +24,11 @@ struct GContext
 {
   static std::string_view VERTEX_SHADER;
   static std::string_view FRAGMENT_SHADER;
-  static constexpr i32 Width = 1920 * 2, Height = 1080 * 2;
+  static constexpr i32 Width = 1920, Height = 1080;
   static constexpr i32 cellside = 1;
   static constexpr i32 gridWidth = Width / cellside;
   static constexpr i32 gridHeight = Height / cellside;
-  static constexpr bool high_dpi = true;
+  static constexpr bool high_dpi = false;
   f32 current_width, current_height;
   math::mat4 projection;
   math::mat4 currentProjection;
