@@ -10,7 +10,6 @@
 #define RANDOM_HPP_
 
 #include <random>
-#include <ranges>
 #include <algorithm>
 #include "MyTypes.hpp"
 #include "MathConcepts.hpp"
@@ -58,14 +57,13 @@ public:
   template <typename Container>
   inline constexpr void shuffle(Container&& container)
   {
-    std::ranges::shuffle(std::forward<Container>(container), m_generator);
+    std::shuffle(container.begin(), container.end(), m_generator);
   }
 
   template <typename Container>
   inline constexpr auto& chooseOne(Container&& container)
   {
-    auto span = std::span(std::forward<Container>(container));
-    return span[generate<usz>(0, span.size() - 1)];
+    return container[generate<usz>(0, container.size() - 1)];
   }
 
 private:

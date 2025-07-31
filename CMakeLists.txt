@@ -26,6 +26,7 @@ target_link_libraries(app
     log
     Math
     fileio
+    fmt
 )
 
 # include directory
@@ -38,7 +39,7 @@ target_compile_features(app
   PRIVATE
     cxx_generalized_initializers
     cxx_relaxed_constexpr
-    cxx_std_23
+    cxx_std_20
 )
 
 add_custom_command(
