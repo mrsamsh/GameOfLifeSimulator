@@ -23,56 +23,8 @@
 
 struct GContext
 {
-  static constexpr std::string_view VERTEX_SHADER = R"(#version 410 core
-
-layout (location = 0) in float aColor;
-
-uniform mat4 projection;
-uniform vec2 gridSize;
-
-out vec4 OutColor;
-
-const vec2 VertexPositions[4] = vec2[4](
-  vec2(0.0, 0.0),
-  vec2(0.8, 0.0),
-  vec2(0.8, 0.8),
-  vec2(0.0, 0.8)
-);
-
-void main()
-{
-  int i = int(aColor);
-  switch (i)
-  {
-    case 1:
-      OutColor = vec4(1, 1, 1, 1);
-      break;
-    case 0:
-      OutColor = vec4(0, 0.0125, 0.1, 1);
-      break;
-    default:
-      OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
-      break;
-  }
-
-  vec2 translation;
-  translation.x = mod(gl_InstanceID, gridSize.x);
-  translation.y = int(gl_InstanceID) / int(gridSize.x);
-  vec2 position = VertexPositions[gl_VertexID] + translation;
-  gl_Position = projection * vec4(position, 0, 1);
-}
-)";
-  static constexpr std::string_view FRAGMENT_SHADER = R"(#version 410 core
-
-in vec4 OutColor;
-
-out vec4 FragColor;
-
-void main()
-{
-  FragColor = OutColor;
-}
-)";
+  static std::string_view VERTEX_SHADER;
+  static std::string_view FRAGMENT_SHADER;
   static constexpr i32 Width = 1920 * 2, Height = 1080 * 2;
   static constexpr i32 cellside = 1;
   static constexpr i32 gridWidth = Width / cellside;
@@ -138,7 +90,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
       {GL_FRAGMENT_SHADER, GContext::FRAGMENT_SHADER}
   });
 
-  context->projection = math::mat4::ortho(0, GContext::gridWidth, 0, GContext::gridHeight, -10, 10);
+  context->projection = math::mat4::ortho(0, GContext::Width, 0, GContext::Height, -10, 10);
   context->currentProjection = context->projection;
   context->program.use().set("projection", context->projection);
   context->program.use().set("gridSize", math::vec2(GContext::gridWidth, GContext::gridHeight));
@@ -460,7 +412,61 @@ void handleResize(GContext* context)
       0, height,
       -10, 10
       );
+  SDL_GetWindowSizeInPixels(context->window, &width, &height);
+  glViewport(0, 0, width, height);
   context->current_width = width;
   context->current_height = height;
   updateCamera(context);
 }
+
+std::string_view GContext::VERTEX_SHADER = R"(#version 410 core
+
+layout (location = 0) in float aColor;
+
+uniform mat4 projection;
+uniform vec2 gridSize;
+
+out vec4 OutColor;
+
+const vec2 VertexPositions[4] = vec2[4](
+vec2(0.0, 0.0),
+vec2(0.8, 0.0),
+vec2(0.8, 0.8),
+vec2(0.0, 0.8)
+);
+
+void main()
+{
+int i = int(aColor);
+switch (i)
+{
+  case 1:
+    OutColor = vec4(1, 1, 1, 1);
+    break;
+  case 0:
+    OutColor = vec4(0, 0.0125, 0.1, 1);
+    break;
+  default:
+    OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
+    break;
+}
+
+vec2 translation;
+translation.x = mod(gl_InstanceID, gridSize.x);
+translation.y = int(gl_InstanceID) / int(gridSize.x);
+vec2 position = VertexPositions[gl_VertexID] + translation;
+gl_Position = projection * vec4(position, 0, 1);
+}
+)";
+
+std::string_view GContext::FRAGMENT_SHADER = R"(#version 410 core
+
+in vec4 OutColor;
+
+out vec4 FragColor;
+
+void main()
+{
+FragColor = OutColor;
+}
+)";
