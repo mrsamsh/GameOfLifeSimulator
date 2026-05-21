@@ -21,14 +21,14 @@ class Time;
 namespace literals
 {
 
-  constexpr math::Time operator"" _sec(u64 const);
-  constexpr math::Time operator"" _sec(f128 const);
-  constexpr math::Time operator"" _mlsec(u64 const);
-  constexpr math::Time operator"" _mlsec(f128 const);
-  constexpr math::Time operator"" _mcsec(u64 const);
-  constexpr math::Time operator"" _mcsec(f128 const);
-  constexpr math::Time operator"" _nsec(u64 const);
-  constexpr math::Time operator"" _nsec(f128 const);
+  constexpr math::Time operator""_sec(u64 const);
+  constexpr math::Time operator""_sec(f128 const);
+  constexpr math::Time operator""_mlsec(u64 const);
+  constexpr math::Time operator""_mlsec(f128 const);
+  constexpr math::Time operator""_mcsec(u64 const);
+  constexpr math::Time operator""_mcsec(f128 const);
+  constexpr math::Time operator""_nsec(u64 const);
+  constexpr math::Time operator""_nsec(f128 const);
 
 } // namespace literals
 
@@ -126,14 +126,14 @@ private:
   friend inline constexpr Time microseconds(u64 const mcs);
   friend inline constexpr Time nanoseconds(u64 const ns);
 
-  friend constexpr Time literals::operator"" _sec(u64 const);
-  friend constexpr Time literals::operator"" _sec(f128 const);
-  friend constexpr Time literals::operator"" _mlsec(u64 const);
-  friend constexpr Time literals::operator"" _mlsec(f128 const);
-  friend constexpr Time literals::operator"" _mcsec(u64 const);
-  friend constexpr Time literals::operator"" _mcsec(f128 const);
-  friend constexpr Time literals::operator"" _nsec(u64 const);
-  friend constexpr Time literals::operator"" _nsec(f128 const);
+  friend constexpr Time literals::operator""_sec(u64 const);
+  friend constexpr Time literals::operator""_sec(f128 const);
+  friend constexpr Time literals::operator""_mlsec(u64 const);
+  friend constexpr Time literals::operator""_mlsec(f128 const);
+  friend constexpr Time literals::operator""_mcsec(u64 const);
+  friend constexpr Time literals::operator""_mcsec(f128 const);
+  friend constexpr Time literals::operator""_nsec(u64 const);
+  friend constexpr Time literals::operator""_nsec(f128 const);
 };
 
 inline constexpr Time seconds(f64 const s)
@@ -159,35 +159,35 @@ inline constexpr Time nanoseconds(u64 const ns)
 namespace literals
 {
 
-  constexpr math::Time operator"" _sec(u64 const s)
+  constexpr math::Time operator""_sec(u64 const s)
   {
     return math::seconds(s);
   }
-  constexpr math::Time operator"" _sec(f128 const s)
+  constexpr math::Time operator""_sec(f128 const s)
   {
     return math::seconds(s);
   }
-  constexpr math::Time operator"" _mlsec(u64 const ms)
+  constexpr math::Time operator""_mlsec(u64 const ms)
   {
     return math::milliseconds(ms);
   }
-  constexpr math::Time operator"" _mlsec(f128 const ms)
+  constexpr math::Time operator""_mlsec(f128 const ms)
   {
     return math::milliseconds(ms);
   }
-  constexpr math::Time operator"" _mcsec(u64 const mcs)
+  constexpr math::Time operator""_mcsec(u64 const mcs)
   {
     return math::microseconds(mcs);
   }
-  constexpr math::Time operator"" _mcsec(f128 const mcs)
+  constexpr math::Time operator""_mcsec(f128 const mcs)
   {
     return math::microseconds(mcs);
   }
-  constexpr math::Time operator"" _nsec(u64 const ns)
+  constexpr math::Time operator""_nsec(u64 const ns)
   {
     return Time(ns);
   }
-  constexpr math::Time operator"" _nsec(f128 const ns)
+  constexpr math::Time operator""_nsec(f128 const ns)
   {
     return Time(ns);
   }

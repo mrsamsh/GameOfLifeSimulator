@@ -22,10 +22,10 @@ class Angle;
 namespace literals
 {
 
-  constexpr math::Angle operator"" _deg(u64 const);
-  constexpr math::Angle operator"" _rad(u64 const);
-  constexpr math::Angle operator"" _deg(f128 const);
-  constexpr math::Angle operator"" _rad(f128 const);
+  constexpr math::Angle operator""_deg(u64 const);
+  constexpr math::Angle operator""_rad(u64 const);
+  constexpr math::Angle operator""_deg(f128 const);
+  constexpr math::Angle operator""_rad(f128 const);
 
 } // namespace literals
 
@@ -175,10 +175,10 @@ private:
   friend inline constexpr Angle degrees(f64 const);
   friend inline constexpr Angle radians(f64 const);
 
-  friend constexpr Angle literals::operator"" _deg(u64);
-  friend constexpr Angle literals::operator"" _rad(u64);
-  friend constexpr Angle literals::operator"" _deg(f128);
-  friend constexpr Angle literals::operator"" _rad(f128);
+  friend constexpr Angle literals::operator""_deg(u64);
+  friend constexpr Angle literals::operator""_rad(u64);
+  friend constexpr Angle literals::operator""_deg(f128);
+  friend constexpr Angle literals::operator""_rad(f128);
 };
 
 [[nodiscard]] inline constexpr
@@ -197,25 +197,25 @@ namespace literals
 {
 
   [[nodiscard]] constexpr
-  math::Angle operator"" _deg(u64 const d)
+  math::Angle operator""_deg(u64 const d)
   {
     return math::Angle(d);
   }
 
   [[nodiscard]] constexpr
-  math::Angle operator"" _rad(u64 const r)
+  math::Angle operator""_rad(u64 const r)
   {
     return math::Angle(r * math::Angle::ToDegrees);
   }
 
   [[nodiscard]] constexpr
-  math::Angle operator"" _deg(f128 const d)
+  math::Angle operator""_deg(f128 const d)
   {
     return math::Angle(d);
   }
 
   [[nodiscard]] constexpr
-  math::Angle operator"" _rad(f128 const r)
+  math::Angle operator""_rad(f128 const r)
   {
     return math::Angle(r * math::Angle::ToDegrees);
   }
