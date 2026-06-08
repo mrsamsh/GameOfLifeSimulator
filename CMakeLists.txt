@@ -28,7 +28,6 @@ target_link_libraries(${TargetApp}
     log
     Math
     fileio
-    fmt
 )
 
 # include directory
@@ -41,19 +40,18 @@ target_compile_features(${TargetApp}
   PRIVATE
     cxx_generalized_initializers
     cxx_relaxed_constexpr
-    cxx_std_20
+    cxx_std_23
 )
 
-add_custom_command(
-  TARGET ${TargetApp} POST_BUILD
+add_custom_target(CopyCompileCommands ALL
   COMMAND
-    ${CMAKE_COMMAND} -E create_symlink
+    ${CMAKE_COMMAND} -E copy
       "${CMAKE_BINARY_DIR}/compile_commands.json"
       "${CMAKE_SOURCE_DIR}/compile_commands.json"
-  # DEPENDS "${CMAKE_SOURCE_DIR}/compile_commands.json"
-  COMMENT "Creating symlink for compile_commands"
+    COMMENT "Copying compile_commands"
 )
 
+if(APPLE)
 set_target_properties(${TargetApp}
 PROPERTIES
   MACOSX_BUNDLE_NAME            "GameOfLife"
@@ -62,4 +60,6 @@ PROPERTIES
   MACOSX_BUNDLE_ICON_FILE       "icon.icns"
   MACOSX_BUNDLE   "TRUE"
 )
+endif()
 
+add_dependencies(${TargetName} CopyCompileCommands)

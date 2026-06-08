@@ -88,7 +88,7 @@ GLuint loadShaderFromString(GLenum type, std::string_view source_view)
   glCompileShader(shader);
   if (hasFailed<StatusFor::Shader>(shader))
   {
-    log::println("Failed to compile {} shader with source\n{}\n error: {}",
+    logg::println("Failed to compile {} shader with source\n{}\n error: {}",
         priv::getShaderStr(type),
         source_view.data(),
         getInfoLog<StatusFor::Shader>(shader));
@@ -109,7 +109,7 @@ GLuint loadShader(GLenum type, std::string_view filename)
   }
   if (hasFailed<StatusFor::Shader>(shader))
   {
-    log::println("Failed to compile {} shader with source\n{}\n error: {}",
+    logg::println("Failed to compile {} shader with source\n{}\n error: {}",
         priv::getShaderStr(type),
         (*str).data(),
         getInfoLog<StatusFor::Shader>(shader));
@@ -133,7 +133,7 @@ void ShaderProgram::loadProgramFromString(std::vector<std::pair<GLenum, std::str
   glLinkProgram(id);
   if (priv::hasFailed<priv::StatusFor::Program>(id))
   {
-    log::println("Failed to link program: {}",
+    logg::println("Failed to link program: {}",
         priv::getInfoLog<priv::StatusFor::Program>(id));
   }
   for (auto& shader : loadedShaders)
@@ -154,7 +154,7 @@ void ShaderProgram::loadProgram(std::vector<std::pair<GLenum, std::string_view>>
   glLinkProgram(id);
   if (priv::hasFailed<priv::StatusFor::Program>(id))
   {
-    log::println("Failed to link program: {}",
+    logg::println("Failed to link program: {}",
         priv::getInfoLog<priv::StatusFor::Program>(id));
   }
   for (auto& shader : loadedShaders)
@@ -176,7 +176,7 @@ GLint ShaderProgram::getLocation(std::string_view name)
 {
   GLint result = glGetUniformLocation(id, name.data());
   if (result < 0)
-    log::println("Couldn't load name {} from program with id {}", name, id);
+    logg::println("Couldn't load name {} from program with id {}", name, id);
   return result;
 }
 

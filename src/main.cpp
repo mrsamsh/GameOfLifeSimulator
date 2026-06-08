@@ -57,6 +57,7 @@ struct GContext
 
 void updateCamera(GContext* context);
 void handleResize(GContext* context);
+void toggleFullScreen(GContext* context);
 
 void reset_cells(GContext::array_t& cells, unsigned int seed = std::time(nullptr));
 
@@ -122,11 +123,14 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
     case SDL_EVENT_KEY_DOWN:
       if (event->key.key == SDLK_ESCAPE)
         return SDL_APP_SUCCESS;
+      else if (event->key.key == SDLK_RETURN && event->key.mod & SDL_KMOD_ALT)
+        toggleFullScreen(context);
+    break;
     case SDL_EVENT_WINDOW_RESIZED:
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
       handleResize(context);
     default:
-      break;
+    break;
   }
   return SDL_APP_CONTINUE;
 }
@@ -424,6 +428,13 @@ void handleResize(GContext* context)
   updateCamera(context);
   SDL_GetWindowSizeInPixels(context->window, &width, &height);
   glViewport(0, 0, width, height);
+}
+
+void toggleFullScreen(GContext* context)
+{
+  u32 flags = SDL_GetWindowFlags(context->window);
+
+  SDL_SetWindowFullscreen(context->window, !(flags & SDL_WINDOW_FULLSCREEN));
 }
 
 std::string_view GContext::VERTEX_SHADER = R"(#version 410 core

@@ -1,0 +1,32 @@
+[
+{
+  "directory": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug",
+  "command": "C:\\msys64\\mingw64\\bin\\clang++.exe -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/glad/include -IC:/Users/mrsam/Downloads/SDL3-devel-3.4.10-mingw/SDL3-3.4.10/x86_64-w64-mingw32/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/logging/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/mathlib/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/file/include -g -std=gnu++23 -o CMakeFiles\\GameOfLife.dir\\src\\ShaderProgram.cpp.obj -c C:\\Users\\mrsam\\Projects\\CPlusPlus\\GameOfLifeSimulator\\src\\ShaderProgram.cpp",
+  "file": "C:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/src/ShaderProgram.cpp",
+  "output": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug/CMakeFiles/GameOfLife.dir/src/ShaderProgram.cpp.obj"
+},
+{
+  "directory": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug",
+  "command": "C:\\msys64\\mingw64\\bin\\clang++.exe -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/glad/include -IC:/Users/mrsam/Downloads/SDL3-devel-3.4.10-mingw/SDL3-3.4.10/x86_64-w64-mingw32/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/logging/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/mathlib/include -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/file/include -g -std=gnu++23 -o CMakeFiles\\GameOfLife.dir\\src\\main.cpp.obj -c C:\\Users\\mrsam\\Projects\\CPlusPlus\\GameOfLifeSimulator\\src\\main.cpp",
+  "file": "C:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/src/main.cpp",
+  "output": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug/CMakeFiles/GameOfLife.dir/src/main.cpp.obj"
+},
+{
+  "directory": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug",
+  "command": "C:\\msys64\\mingw64\\bin\\clang.exe -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/glad/include -g -o libs\\glad\\CMakeFiles\\Glad.dir\\src\\glad.c.obj -c C:\\Users\\mrsam\\Projects\\CPlusPlus\\GameOfLifeSimulator\\libs\\glad\\src\\glad.c",
+  "file": "C:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/glad/src/glad.c",
+  "output": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug/libs/glad/CMakeFiles/Glad.dir/src/glad.c.obj"
+},
+{
+  "directory": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug",
+  "command": "C:\\msys64\\mingw64\\bin\\clang++.exe -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/mathlib/include -g -std=gnu++23 -o libs\\mathlib\\CMakeFiles\\testMath.dir\\src\\main.cpp.obj -c C:\\Users\\mrsam\\Projects\\CPlusPlus\\GameOfLifeSimulator\\libs\\mathlib\\src\\main.cpp",
+  "file": "C:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/mathlib/src/main.cpp",
+  "output": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug/libs/mathlib/CMakeFiles/testMath.dir/src/main.cpp.obj"
+},
+{
+  "directory": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug",
+  "command": "C:\\msys64\\mingw64\\bin\\clang++.exe -IC:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/file/include -g -std=gnu++20 -o libs\\file\\CMakeFiles\\fileio.dir\\src\\File.cpp.obj -c C:\\Users\\mrsam\\Projects\\CPlusPlus\\GameOfLifeSimulator\\libs\\file\\src\\File.cpp",
+  "file": "C:/Users/mrsam/Projects/CPlusPlus/GameOfLifeSimulator/libs/file/src/File.cpp",
+  "output": "C:/Users/mrsam/Projects/build/GameOfLifeSimulator/Debug/libs/file/CMakeFiles/fileio.dir/src/File.cpp.obj"
+}
+]

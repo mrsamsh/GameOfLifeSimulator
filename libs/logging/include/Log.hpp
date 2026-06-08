@@ -9,11 +9,11 @@
 #ifndef LOG_HPP_
 #define LOG_HPP_
 
-#include <fmt/format.h>
+#include <format>
 #include <iostream>
 #include <ctime>
 
-namespace log
+namespace logg
 {
 
 static inline char const* getTime()
@@ -27,19 +27,19 @@ static inline char const* getTime()
 template <typename ... Args>
 inline
 void logHelper(std::string_view level, std::string_view file, int line,
-    fmt::format_string<Args...> fmt, Args&& ... args)
+    std::format_string<Args...> fmt, Args&& ... args)
 {
-  std::cout << fmt::format("[{}] ({:>15}:{:<5})[{}] ",
+  std::cout << std::format("[{}] ({:>15}:{:<5})[{}] ",
         getTime(),
         file, line,
         level);
-  std::cout << fmt::format(fmt, std::forward<Args>(args)...) << std::endl;
+  std::cout << std::format(fmt, std::forward<Args>(args)...) << std::endl;
 }
 
 template <typename ... Args>
-inline void println(fmt::format_string<Args...> fmt = "", Args&& ... args)
+inline void println(std::format_string<Args...> fmt = "", Args&& ... args)
 {
-  std::cout << fmt::format(fmt, std::forward<Args>(args)...) << std::endl;
+  std::cout << std::format(fmt, std::forward<Args>(args)...) << std::endl;
 }
 
 #define TRACE(message, ...)                                                    \
