@@ -24,18 +24,20 @@ struct GContext
 {
   static std::string_view VERTEX_SHADER;
   static std::string_view FRAGMENT_SHADER;
-  static constexpr i32 Width = 1920, Height = 1080;
-  static constexpr i32 cellside = 1;
-  static constexpr i32 gridWidth = Width / cellside;
-  static constexpr i32 gridHeight = Height / cellside;
-  static constexpr bool high_dpi = false;
+  static constexpr i32 WindowWidth = 1920, WindowHeight = 1080;
+  static constexpr i32 CellSide = 2;
+  static constexpr i32 gridWidth = WindowWidth / CellSide;
+  static constexpr i32 gridHeight = WindowHeight / CellSide;
+  static constexpr bool high_dpi = true;
   f32 current_width, current_height;
   math::mat4 projection;
-  math::mat4 currentProjection;
+  math::mat4 view;
+  // math::mat4 currentProjection;
   f32 pixel_density;
   struct Camera {
     f32 zoom = 1;
-    math::vec2 target = math::vec2(Width, Height) / 2.f;
+    math::vec2 target = math::vec2(WindowWidth, WindowHeight) / 2.f;
+    math::vec2 offset = math::vec2(WindowWidth, WindowHeight) / 2.f;
   } camera;
   SDL_Window* window;
   ShaderProgram program;
@@ -53,7 +55,7 @@ struct GContext
   bool space_state[2] = {}, reset_state[2] = {}, step_state[2] = {};
 };
 
-void updateCamera(GContext* cam);
+void updateCamera(GContext* context);
 void handleResize(GContext* context);
 
 void reset_cells(GContext::array_t& cells, unsigned int seed = std::time(nullptr));
@@ -72,7 +74,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
   context->window = SDL_CreateWindow(
       "Test",
-      GContext::Width, GContext::Height,
+      GContext::WindowWidth, GContext::WindowHeight,
       SDL_WINDOW_OPENGL
       | (GContext::high_dpi ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0)
       // | SDL_WINDOW_FULLSCREEN
@@ -89,10 +91,12 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
       {GL_FRAGMENT_SHADER, GContext::FRAGMENT_SHADER}
   });
 
-  context->projection = math::mat4::ortho(0, GContext::Width, 0, GContext::Height, -10, 10);
-  context->currentProjection = context->projection;
-  context->program.use().set("projection", context->projection);
+  context->projection = math::mat4::ortho(0, GContext::WindowWidth, 0, GContext::WindowHeight, -10, 10);
+  context->view = math::mat4::Identity();
+  // context->currentProjection = context->projection;
+  context->program.use().set("projection", context->projection * context->view);
   context->program.use().set("gridSize", math::vec2(GContext::gridWidth, GContext::gridHeight));
+  context->program.use().set("cellSide", (f32)context->CellSide);
 
   glGenVertexArrays(1, &context->VAO);
   glBindVertexArray(context->VAO);
@@ -133,8 +137,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   static math::Time begin = 0_sec;
 
   auto calculateNext = [&](GContext::array_t const& current_cells, GContext::array_t& next_cells) {
-    const int gridWidth  = GContext::Width  / context->cellside;
-    const int gridHeight = GContext::Height / context->cellside;
+    const int gridWidth  = GContext::WindowWidth  / context->CellSide;
+    const int gridHeight = GContext::WindowHeight / context->CellSide;
     std::fill(next_cells.begin(), next_cells.end(), 0);
     for (auto y = 0; y < gridHeight - 1; ++y) {
       for (auto x = 0; x < gridWidth; ++x) {
@@ -298,24 +302,25 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     context->swap_cells();
   }
 
-  auto mouseToNormal = context->projection;
   math::vec3 mousepos {};
   auto state = SDL_GetMouseState(&mousepos.x, &mousepos.y);
   static bool last_time, this_time;
   last_time = this_time;
   this_time = (state & SDL_BUTTON_LMASK) != 0;
-  mousepos = mouseToNormal.transform(mousepos);
-  mousepos = context->currentProjection.inverse().transform(mousepos);
+  // mousepos = mouseToNormal.transform(mousepos);
   if (this_time && !last_time) {
-    u32 i = floor(mousepos.x) + floor(mousepos.y) * GContext::Width;
+    mousepos = context->view.inverse().transform(mousepos);
+    u32 xx = floor(mousepos.x) / GContext::CellSide;
+    u32 yy = floor(mousepos.y) / GContext::CellSide;
+    u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
     auto& clicked_cell = (*context->current_cells)[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
   }
 
   f32 zoomF = 0;
   math::vec2 camVel;
-  static constexpr f64 FPS = 15.0;
-  static constexpr f32 CamSpeed = 50;
+  static constexpr f64 FPS = 60.0;
+  static constexpr f32 CamSpeed = 300;
   static constexpr math::Time Delta = math::seconds(1.0 / FPS);
   if (keyboard[SDL_SCANCODE_K]) zoomF += 2;
   if (keyboard[SDL_SCANCODE_J]) zoomF -= 2;
@@ -325,7 +330,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   if (keyboard[SDL_SCANCODE_W]) camVel.y -= 1;
   if (zoomF != 0 || !math::isZero(camVel)) {
     context->camera.zoom *= (1 + zoomF * context->pixel_density * Delta.asMilliseconds() / 4000.f);
-    context->camera.target += camVel * context->pixel_density * CamSpeed * Delta.asSeconds();
+    context->camera.target += camVel * context->pixel_density * CamSpeed * Delta.asSeconds()
+                                     * (1.f / (context->camera.zoom));
     updateCamera(context);
   }
 
@@ -361,38 +367,39 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result)
 
 void updateCamera(GContext* context)
 {
-  context->camera.zoom = math::clamp(context->camera.zoom, 1.f, 30.f);
+  GContext::Camera& camera = context->camera;
+  math::vec2 min = {0, 0};
+  math::vec2 max = {GContext::WindowWidth, GContext::WindowHeight};
+  math::vec2 current_size = {context->current_width, context->current_height};
+  math::vec2 temp = current_size / max;
+  f32 min_zoom = math::max(temp.x, temp.y);
+  camera.zoom = math::clamp(camera.zoom, min_zoom, 30.f);
 
-  math::vec2 orig_size = math::vec2(GContext::Width, GContext::Height);// * context->pixel_density;
-  math::vec2 orig_half_size = orig_size / 2.f;
-  math::vec2 current_size {context->current_width, context->current_height};
-  math::vec2 view_size = current_size / context->camera.zoom;
-  math::vec2 view_half_size = view_size / 2.f;
+  math::vec2 apparent_offset = camera.offset / camera.zoom;
 
-  math::vec2 view_half_size_in_world = view_size / (context->camera.zoom * 2.f);
+  // limit the boundaries
+  camera.target.x = math::clamp(
+      camera.target.x,
+      min.x + apparent_offset.x,
+      max.x - apparent_offset.x
+  );
 
-  context->camera.target.x = std::clamp(context->camera.target.x, view_half_size_in_world.x, orig_size.x - view_half_size_in_world.x);
-  context->camera.target.y = std::clamp(context->camera.target.y, view_half_size_in_world.y, orig_size.y - view_half_size_in_world.y);
+  camera.target.y = math::clamp(
+      camera.target.y,
+      min.y + apparent_offset.y,
+      max.y - apparent_offset.y
+  );
 
-  math::vec2 target = (context->camera.target - orig_half_size) * context->camera.zoom + orig_half_size;
-  target -= view_half_size;
-  math::mat4 projection = math::mat4::ortho(
-      context->camera.target.x - view_half_size_in_world.x,
-      context->camera.target.x + view_half_size_in_world.x,
-      context->camera.target.y - view_half_size_in_world.y,
-      context->camera.target.y + view_half_size_in_world.y,
-      -10, 10
-      );
-
-  context->program.set("projection", projection);
-  context->currentProjection = projection;
-
-  // glViewport(target.x, target.y, view_size.x, view_size.y);
+  context->view = math::mat4::Identity()
+    .translate({camera.offset.x, camera.offset.y, 0})
+    .scale({camera.zoom, camera.zoom, 1})
+    .translate({-camera.target.x, -camera.target.y, 0});
+  context->program.set("projection", context->projection * context->view);
 }
 
 void reset_cells(GContext::array_t& cells, unsigned int seed) {
 
-  srand(seed);
+  // srand(seed);
   for (auto& cell : cells) {
     if (rand() % RAND_CHANCE == 3) {
       cell = 1;
@@ -411,11 +418,12 @@ void handleResize(GContext* context)
       0, height,
       -10, 10
       );
-  SDL_GetWindowSizeInPixels(context->window, &width, &height);
-  glViewport(0, 0, width, height);
   context->current_width = width;
   context->current_height = height;
+  context->camera.offset = math::vec2(width, height) / 2.f;
   updateCamera(context);
+  SDL_GetWindowSizeInPixels(context->window, &width, &height);
+  glViewport(0, 0, width, height);
 }
 
 std::string_view GContext::VERTEX_SHADER = R"(#version 410 core
@@ -424,37 +432,38 @@ layout (location = 0) in float aColor;
 
 uniform mat4 projection;
 uniform vec2 gridSize;
+uniform float cellSide;
 
 out vec4 OutColor;
 
 const vec2 VertexPositions[4] = vec2[4](
-vec2(0.0, 0.0),
-vec2(0.8, 0.0),
-vec2(0.8, 0.8),
-vec2(0.0, 0.8)
+  vec2(0.0, 0.0),
+  vec2(0.8, 0.0),
+  vec2(0.8, 0.8),
+  vec2(0.0, 0.8)
 );
 
 void main()
 {
-int i = int(aColor);
-switch (i)
-{
-  case 1:
-    OutColor = vec4(1, 1, 1, 1);
-    break;
-  case 0:
-    OutColor = vec4(0, 0.0125, 0.1, 1);
-    break;
-  default:
-    OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
-    break;
-}
+  int i = int(aColor);
+  switch (i)
+  {
+    case 1:
+      OutColor = vec4(1, 1, 1, 1);
+      break;
+    case 0:
+      OutColor = vec4(0, 0.0125, 0.1, 1);
+      break;
+    default:
+      OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
+      break;
+  }
 
-vec2 translation;
-translation.x = mod(gl_InstanceID, gridSize.x);
-translation.y = int(gl_InstanceID) / int(gridSize.x);
-vec2 position = VertexPositions[gl_VertexID] + translation;
-gl_Position = projection * vec4(position, 0, 1);
+  vec2 translation;
+  translation.x = mod(gl_InstanceID, gridSize.x) * cellSide;
+  translation.y = (int(gl_InstanceID) / int(gridSize.x)) * cellSide;
+  vec2 position = (VertexPositions[gl_VertexID] * cellSide + translation);
+  gl_Position = projection * vec4(position, 0, 1);
 }
 )";
 
