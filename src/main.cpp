@@ -24,8 +24,8 @@ struct GContext
 {
   static std::string_view VERTEX_SHADER;
   static std::string_view FRAGMENT_SHADER;
-  static constexpr i32 WindowWidth = 1920, WindowHeight = 1080;
-  static constexpr i32 CellSide = 2;
+  static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
+  static constexpr i32 CellSide = 1;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -147,57 +147,57 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     for (auto y = 0; y < gridHeight - 1; ++y) {
       for (auto x = 0; x < gridWidth; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex + gridWidth] += value;
+        auto value = current_cells[cellIndex + gridWidth] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 1; y < gridHeight; ++y) {
       for (auto x = 0; x < gridWidth; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex - gridWidth] += value;
+        auto value = current_cells[cellIndex - gridWidth] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 0; y < gridHeight; ++y) {
       for (auto x = 0; x < gridWidth - 1; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex + 1] += value;
+        auto value = current_cells[cellIndex + 1] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 0; y < gridHeight; ++y) {
       for (auto x = 1; x < gridWidth; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex - 1] += value;
+        auto value = current_cells[cellIndex - 1] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 1; y < gridHeight; ++y) {
       for (auto x = 1; x < gridWidth; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex - 1 - gridWidth] += value;
+        auto value = current_cells[cellIndex - 1 - gridWidth] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 0; y < gridHeight - 1; ++y) {
       for (auto x = 1; x < gridWidth; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex - 1 + gridWidth] += value;
+        auto value = current_cells[cellIndex - 1 + gridWidth] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 0; y < gridHeight - 1; ++y) {
       for (auto x = 0; x < gridWidth - 1; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex + 1 + gridWidth] += value;
+        auto value = current_cells[cellIndex + 1 + gridWidth] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     for (auto y = 1; y < gridHeight; ++y) {
       for (auto x = 0; x < gridWidth - 1; ++x) {
         auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex] == 1 ? 1 : 0;
-        next_cells[cellIndex + 1 - gridWidth] += value;
+        auto value = current_cells[cellIndex + 1 - gridWidth] == 1 ? 1 : 0;
+        next_cells[cellIndex] += value;
       }
     }
     // edge cases?
@@ -341,7 +341,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   // update here
   if (updating)
+  {
+    // u64 start = SDL_GetTicksNS();
     calculateNext(*context->current_cells, *context->next_cells);
+    // u64 end = SDL_GetTicksNS() - start;
+    // std::println("elapsed: {:7.3f} ms", end * 1.e-6);
+  }
   // -----------------------------------
   glClear(GL_COLOR_BUFFER_BIT);
 
