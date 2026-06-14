@@ -25,7 +25,7 @@ struct GContext
   static std::string_view VERTEX_SHADER;
   static std::string_view FRAGMENT_SHADER;
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 2;
+  static constexpr i32 CellSide = 1;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -595,7 +595,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   u64 end = SDL_GetTicksNS() - start;
 
-  std::println("elapsed: {:7.3f}", end * 1.e-6);
+  // std::println("elapsed: {:7.3f}", end * 1.e-6);
 
   if (updating)
   {
@@ -608,6 +608,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   if (updating)
     context.swap_cells();
   auto elapsed = math::Clock::Now() - begin;
+  std::println("elapsed: {:7.3f} ms", elapsed.asNanoseconds() * 1.e-6);
   if (elapsed < Delta)
     SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
   begin = math::Clock::Now();
