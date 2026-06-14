@@ -10,6 +10,7 @@
 #include <Math.hpp>
 #include <MathPrint.hpp>
 #include <thread>
+#include <print>
 
 #include "Array.hpp"
 #include "Clock.hpp"
@@ -58,34 +59,40 @@ struct GContext
   SDL_GPUViewport viewport;
 };
 
-void updateCamera(GContext* context);
-void handleResize(GContext* context);
-void toggleFullScreen(GContext* context);
+void updateCamera(GContext& context);
+void handleResize(GContext& context);
+void toggleFullScreen(GContext& context);
 
 void reset_cells(GContext::array_t& cells, unsigned int seed = std::time(nullptr));
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 {
   srand(std::time(nullptr));
-  GContext* context = new GContext;
-  *appstate = context;
+  static GContext context;
+  *appstate = &context;
 
   // GContext* context = (GContext*)(*appstate);
-  reset_cells(*context->current_cells);
+  reset_cells(*context.current_cells);
 
   SDL_Init(SDL_INIT_VIDEO);
   bool const* keyboard = SDL_GetKeyboardState(nullptr);
-  context->device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, false, 0);
-  context->window = SDL_CreateWindow(
+  context.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, false, 0);
+  context.window = SDL_CreateWindow(
       "Test",
       GContext::WindowWidth, GContext::WindowHeight,
       (GContext::high_dpi ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0)
       // | SDL_WINDOW_FULLSCREEN
       | SDL_WINDOW_RESIZABLE
       );
-  SDL_ClaimWindowForGPUDevice(context->device, context->window);
+  SDL_ClaimWindowForGPUDevice(context.device, context.window);
+  if (SDL_WindowSupportsGPUPresentMode(context.device, context.window, SDL_GPU_PRESENTMODE_IMMEDIATE))
+  {
+    SDL_SetGPUSwapchainParameters(context.device, context.window,
+        SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2084,
+        SDL_GPU_PRESENTMODE_IMMEDIATE);
+  }
 
-  context->pixel_density = SDL_GetWindowPixelDensity(context->window);
+  context.pixel_density = SDL_GetWindowPixelDensity(context.window);
 
   SDL_GPUShaderCreateInfo vshader_info {
     .code_size = GContext::VERTEX_SHADER.size(),
@@ -95,7 +102,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     .stage = SDL_GPU_SHADERSTAGE_VERTEX,
     .num_uniform_buffers = 1,
   };
-  SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(context->device, &vshader_info);
+  SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(context.device, &vshader_info);
 
   SDL_GPUShaderCreateInfo fshader_info {
     .code_size = GContext::FRAGMENT_SHADER.size(),
@@ -105,7 +112,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
   };
 
-  SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(context->device, &fshader_info);
+  SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(context.device, &fshader_info);
 
   SDL_GPUVertexBufferDescription vb_desc = {
     .slot = 0,
@@ -128,7 +135,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   };
 
   SDL_GPUColorTargetDescription color_target_desc = {
-    .format = SDL_GetGPUSwapchainTextureFormat(context->device, context->window),
+    .format = SDL_GetGPUSwapchainTextureFormat(context.device, context.window),
   };
 
   SDL_GPUGraphicsPipelineTargetInfo pipeline_target_info = {
@@ -145,20 +152,20 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   };
 
 
-  context->pipeline = SDL_CreateGPUGraphicsPipeline(context->device, &pipeline_info);
-  SDL_ReleaseGPUShader(context->device, vertex_shader);
-  SDL_ReleaseGPUShader(context->device, fragment_shader);
+  context.pipeline = SDL_CreateGPUGraphicsPipeline(context.device, &pipeline_info);
+  SDL_ReleaseGPUShader(context.device, vertex_shader);
+  SDL_ReleaseGPUShader(context.device, fragment_shader);
 
-  context->matrices.projection = math::mat4::ortho(0, GContext::WindowWidth, 0, GContext::WindowHeight, -10, 10);
-  context->matrices.view = math::mat4::Identity();
+  context.matrices.projection = math::mat4::ortho(0, GContext::WindowWidth, 0, GContext::WindowHeight, -10, 10);
+  context.matrices.view = math::mat4::Identity();
 
   SDL_GPUBufferCreateInfo buffer_create_info{
     .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
     .size = GContext::array_t::ByteCapacity(),
   };
 
-  context->cell_buffer = SDL_CreateGPUBuffer(
-      context->device,
+  context.cell_buffer = SDL_CreateGPUBuffer(
+      context.device,
       &buffer_create_info
       );
 
@@ -167,19 +174,19 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     .size = GContext::array_t::ByteCapacity()
   };
 
-  context->cell_transfer_buffer = SDL_CreateGPUTransferBuffer(
-      context->device, &transfer_buffer_create_info
+  context.cell_transfer_buffer = SDL_CreateGPUTransferBuffer(
+      context.device, &transfer_buffer_create_info
       );
 
   handleResize(context);
-  SDL_SyncWindow( context->window);
-  SDL_RaiseWindow(context->window);
+  SDL_SyncWindow( context.window);
+  SDL_RaiseWindow(context.window);
   return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 {
-  GContext* context = (GContext*)appstate;
+  GContext& context = *(GContext*)(appstate);
   switch (event->type)
   {
     case SDL_EVENT_QUIT:
@@ -201,12 +208,12 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
-  GContext* context = (GContext*)appstate;
+  GContext& context = *(GContext*)appstate;
   static math::Time begin = 0_sec;
 
   auto calculateNext = [&](GContext::array_t const& current_cells, GContext::array_t& next_cells) {
-    const int gridWidth  = GContext::WindowWidth  / context->CellSide;
-    const int gridHeight = GContext::WindowHeight / context->CellSide;
+    const int gridWidth  = GContext::WindowWidth  / context.CellSide;
+    const int gridHeight = GContext::WindowHeight / context.CellSide;
     std::fill(next_cells.begin(), next_cells.end(), 0);
     {
       std::vector<std::jthread> thread_pool;
@@ -343,7 +350,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
       static constexpr int ThreadCount = 8;
       std::vector<std::jthread> thread_pool;
       thread_pool.reserve(ThreadCount);
-      int chunk = context->next_cells->size() / ThreadCount;
+      int chunk = context.next_cells->size() / ThreadCount;
 
       for (int j = 0; j < ThreadCount; ++j)
       {
@@ -376,29 +383,29 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   static bool const* keyboard = SDL_GetKeyboardState(nullptr);
   static bool updating = true;
-  bool* space = context->space_state;
+  bool* space = context.space_state;
   space[0] = space[1];
   space[1] = keyboard[SDL_SCANCODE_SPACE];
   if (space[1] && !space[0]) {
     updating = !updating;
   }
 
-  bool* reset = context->reset_state;
+  bool* reset = context.reset_state;
   reset[0] = reset[1];
   reset[1] = keyboard[SDL_SCANCODE_R];
 
   if (reset[1] && !reset[0]) {
-    reset_cells(*context->current_cells, 5);
+    reset_cells(*context.current_cells, 5);
   }
 
-  bool* step = context->step_state;
+  bool* step = context.step_state;
   step[0] = step[1];
   step[1] = keyboard[SDL_SCANCODE_E];
 
   if ((step[1] && ! step[0]) || keyboard[SDL_SCANCODE_Q]) {
     updating = false;
-    calculateNext(*context->current_cells, *context->next_cells);
-    context->swap_cells();
+    calculateNext(*context.current_cells, *context.next_cells);
+    context.swap_cells();
   }
 
   math::vec3 mousepos {};
@@ -408,11 +415,11 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   this_time = (state & SDL_BUTTON_LMASK) != 0;
   // mousepos = mouseToNormal.transform(mousepos);
   if (this_time && !last_time) {
-    mousepos = context->matrices.view.inverse().transform(mousepos);
+    mousepos = context.matrices.view.inverse().transform(mousepos);
     u32 xx = floor(mousepos.x) / GContext::CellSide;
     u32 yy = floor(mousepos.y) / GContext::CellSide;
     u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
-    auto& clicked_cell = (*context->current_cells)[i];
+    auto& clicked_cell = (*context.current_cells)[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
   }
 
@@ -428,89 +435,101 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   if (keyboard[SDL_SCANCODE_S]) camVel.y += 1;
   if (keyboard[SDL_SCANCODE_W]) camVel.y -= 1;
   if (zoomF != 0 || !math::isZero(camVel)) {
-    context->camera.zoom *= (1 + zoomF * context->pixel_density * Delta.asMilliseconds() / 4000.f);
-    context->camera.target += camVel * context->pixel_density * CamSpeed * Delta.asSeconds()
-                                     * (1.f / (context->camera.zoom));
+    context.camera.zoom *= (1 + zoomF * context.pixel_density * Delta.asMilliseconds() / 4000.f);
+    context.camera.target += camVel * context.pixel_density * CamSpeed * Delta.asSeconds()
+                                     * (1.f / (context.camera.zoom));
     updateCamera(context);
   }
 
-  // update here
-  if (updating)
   {
-    calculateNext(*context->current_cells, *context->next_cells);
-  }
+  // update here
+  std::jthread th_update([&](){
+        if (updating)
+        {
+          calculateNext(*context.current_cells, *context.next_cells);
+        }
+  });
   // -----------------------------------
 
   // draw here
   // first upload pass
-  SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context->device);
-  SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
-  i32* map = (i32*)SDL_MapGPUTransferBuffer(context->device, context->cell_transfer_buffer, false);
-  memcpy(map, context->current_cells->data(), context->current_cells->ByteCapacity());
-  SDL_UnmapGPUTransferBuffer(context->device, context->cell_transfer_buffer);
+  std::jthread th_render([&context](){
+    u64 start = SDL_GetTicksNS();
+    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context.device);
+    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+    i32* map = (i32*)SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
+    memcpy(map, context.current_cells->data(), context.current_cells->ByteCapacity());
+    SDL_UnmapGPUTransferBuffer(context.device, context.cell_transfer_buffer);
 
-  SDL_GPUTransferBufferLocation location{
-    .transfer_buffer = context->cell_transfer_buffer,
-    .offset = 0
-  };
-  SDL_GPUBufferRegion region{
-    .buffer = context->cell_buffer,
-    .offset = 0,
-    .size = GContext::array_t::ByteCapacity()
-  };
+    static SDL_GPUTransferBufferLocation location{
+      .transfer_buffer = context.cell_transfer_buffer,
+      .offset = 0
+    };
+    static SDL_GPUBufferRegion region{
+      .buffer = context.cell_buffer,
+      .offset = 0,
+      .size = GContext::array_t::ByteCapacity()
+    };
 
-  SDL_UploadToGPUBuffer(
-      copy_pass,
-      &location,
-      &region,
-      false
-      );
+    SDL_UploadToGPUBuffer(
+        copy_pass,
+        &location,
+        &region,
+        false
+        );
 
-  SDL_EndGPUCopyPass(copy_pass);
+    SDL_EndGPUCopyPass(copy_pass);
 
-  SDL_GPUTexture* swapchain_texture;
-  u32 width, height;
-  SDL_WaitAndAcquireGPUSwapchainTexture(
-      command_buffer,
-      context->window,
-      &swapchain_texture,
-      &width,
-      &height
-      );
-  SDL_GPUColorTargetInfo color_target_info{
-    .texture = swapchain_texture,
-    .clear_color = {0.f, 0.025f, 0.2f, 1.f},
-    .load_op = SDL_GPU_LOADOP_CLEAR,
-    .store_op = SDL_GPU_STOREOP_STORE,
-  };
-  SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
-      command_buffer,
-      &color_target_info,
-      1,
-      nullptr
-      );
+    SDL_GPUTexture* swapchain_texture;
+    u32 width, height;
+    SDL_WaitAndAcquireGPUSwapchainTexture(
+        command_buffer,
+        context.window,
+        &swapchain_texture,
+        &width,
+        &height
+        );
+    SDL_GPUColorTargetInfo color_target_info{
+      .texture = swapchain_texture,
+      .clear_color = {0.f, 0.025f, 0.2f, 1.f},
+      .load_op = SDL_GPU_LOADOP_CLEAR,
+      .store_op = SDL_GPU_STOREOP_STORE,
+    };
+    SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
+        command_buffer,
+        &color_target_info,
+        1,
+        nullptr
+        );
 
-  SDL_BindGPUGraphicsPipeline(render_pass, context->pipeline);
-  SDL_GPUBufferBinding buffer_bind{
-    .buffer = context->cell_buffer,
-  };
-  SDL_BindGPUVertexBuffers(render_pass, 0, &buffer_bind, 1);
+    SDL_BindGPUGraphicsPipeline(render_pass, context.pipeline);
+    SDL_GPUBufferBinding buffer_bind{
+      .buffer = context.cell_buffer,
+    };
+    SDL_BindGPUVertexBuffers(render_pass, 0, &buffer_bind, 1);
 
-  SDL_SetGPUViewport(render_pass, &context->viewport);
+    SDL_SetGPUViewport(render_pass, &context.viewport);
 
-  struct {
-    math::mat4 projection;
-    math::vec2 gridSize;
-    f32        cellSide;
-  } ubo = {context->matrices.projection * context->matrices.view, {GContext::gridWidth , GContext::gridHeight}, GContext::CellSide};
+    struct {
+      math::mat4 projection;
+      math::vec2 gridSize;
+      f32        cellSide;
+    } ubo = {context.matrices.projection * context.matrices.view, {GContext::gridWidth , GContext::gridHeight}, GContext::CellSide};
 
-  SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(ubo));
-  SDL_DrawGPUPrimitives(render_pass, 6, context->current_cells->size(), 0, 0);
-  SDL_EndGPURenderPass(render_pass);
-  SDL_SubmitGPUCommandBuffer(command_buffer);
+    SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(ubo));
+    SDL_DrawGPUPrimitives(render_pass, 6, context.current_cells->size(), 0, 0);
+    SDL_EndGPURenderPass(render_pass);
+    SDL_SubmitGPUCommandBuffer(command_buffer);
+
+    u64 end = SDL_GetTicksNS() - start;
+
+    std::println("elapsed: {:7.3f}", end * 1.e-6);
+
+  });
+}
 
   if (updating)
-    context->swap_cells();
+    context.swap_cells();
   auto elapsed = math::Clock::Now() - begin;
   if (elapsed < Delta)
     SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
@@ -521,21 +540,20 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result)
 {
-  GContext* context = (GContext*)appstate;
-  SDL_ReleaseGPUBuffer(context->device, context->cell_buffer);
-  SDL_ReleaseGPUTransferBuffer(context->device, context->cell_transfer_buffer);
-  SDL_DestroyGPUDevice(context->device);
-  SDL_DestroyWindow(context->window);
+  GContext& context = *(GContext*)appstate;
+  SDL_ReleaseGPUBuffer(context.device, context.cell_buffer);
+  SDL_ReleaseGPUTransferBuffer(context.device, context.cell_transfer_buffer);
+  SDL_DestroyGPUDevice(context.device);
+  SDL_DestroyWindow(context.window);
   SDL_Quit();
-  delete context;
 }
 
-void updateCamera(GContext* context)
+void updateCamera(GContext& context)
 {
-  GContext::Camera& camera = context->camera;
+  GContext::Camera& camera = context.camera;
   math::vec2 min = {0, 0};
   math::vec2 max = {GContext::WindowWidth, GContext::WindowHeight};
-  math::vec2 current_size = {context->current_width, context->current_height};
+  math::vec2 current_size = {context.current_width, context.current_height};
   math::vec2 temp = current_size / max;
   f32 min_zoom = math::max(temp.x, temp.y);
   camera.zoom = math::clamp(camera.zoom, min_zoom, 30.f);
@@ -555,7 +573,7 @@ void updateCamera(GContext* context)
       max.y - apparent_offset.y
   );
 
-  context->matrices.view = math::mat4::Identity()
+  context.matrices.view = math::mat4::Identity()
     .translate({camera.offset.x, camera.offset.y, 0})
     .scale({camera.zoom, camera.zoom, 1})
     .translate({-camera.target.x, -camera.target.y, 0});
@@ -573,28 +591,28 @@ void reset_cells(GContext::array_t& cells, unsigned int seed) {
   }
 }
 
-void handleResize(GContext* context)
+void handleResize(GContext& context)
 {
   i32 width, height;
-  SDL_GetWindowSize(context->window, &width, &height);
-  context->matrices.projection = math::mat4::ortho(
+  SDL_GetWindowSize(context.window, &width, &height);
+  context.matrices.projection = math::mat4::ortho(
       0, width,
       0, height,
       -10, 10
       );
-  context->current_width = width;
-  context->current_height = height;
-  context->camera.offset = math::vec2(width, height) / 2.f;
+  context.current_width = width;
+  context.current_height = height;
+  context.camera.offset = math::vec2(width, height) / 2.f;
   updateCamera(context);
-  SDL_GetWindowSizeInPixels(context->window, &width, &height);
-  context->viewport = {0, 0, (f32)width, (f32)height};
+  SDL_GetWindowSizeInPixels(context.window, &width, &height);
+  context.viewport = {0, 0, (f32)width, (f32)height};
 }
 
-void toggleFullScreen(GContext* context)
+void toggleFullScreen(GContext& context)
 {
-  u32 flags = SDL_GetWindowFlags(context->window);
+  u32 flags = SDL_GetWindowFlags(context.window);
 
-  SDL_SetWindowFullscreen(context->window, !(flags & SDL_WINDOW_FULLSCREEN));
+  SDL_SetWindowFullscreen(context.window, !(flags & SDL_WINDOW_FULLSCREEN));
 }
 
 std::string_view GContext::VERTEX_SHADER = R"(
