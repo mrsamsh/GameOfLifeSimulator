@@ -342,10 +342,10 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   // update here
   if (updating)
   {
-    // u64 start = SDL_GetTicksNS();
+    u64 start = SDL_GetTicksNS();
     calculateNext(*context->current_cells, *context->next_cells);
-    // u64 end = SDL_GetTicksNS() - start;
-    // std::println("elapsed: {:7.3f} ms", end * 1.e-6);
+    u64 end = SDL_GetTicksNS() - start;
+    std::println("elapsed: {:7.3f} ms", end * 1.e-6);
   }
   // -----------------------------------
   glClear(GL_COLOR_BUFFER_BIT);
