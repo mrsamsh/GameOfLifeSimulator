@@ -379,6 +379,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     calculateNext(*context->current_cells, *context->next_cells);
   }
   // -----------------------------------
+  u64 start = SDL_GetTicksNS();
   glClear(GL_COLOR_BUFFER_BIT);
 
   glBindVertexArray(context->VAO);
@@ -387,6 +388,10 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, context->current_cells->size());
 
   SDL_GL_SwapWindow(context->window);
+
+  u64 end = SDL_GetTicksNS() - start;
+  std::println("elapsed: {:7.3f}", end * 1.e-6);
+
   if (updating)
     context->swap_cells();
   auto elapsed = math::Clock::Now() - begin;
