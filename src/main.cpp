@@ -10,6 +10,7 @@
 #include <glad/glad.h>
 #include <Math.hpp>
 #include <MathPrint.hpp>
+#include <thread>
 
 #include "Array.hpp"
 #include "ShaderProgram.hpp"
@@ -144,62 +145,79 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     const int gridWidth  = GContext::WindowWidth  / context->CellSide;
     const int gridHeight = GContext::WindowHeight / context->CellSide;
     std::fill(next_cells.begin(), next_cells.end(), 0);
-    for (auto y = 0; y < gridHeight - 1; ++y) {
-      for (auto x = 0; x < gridWidth; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex + gridWidth] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
+    {
+      std::vector<std::jthread> thread_pool;
+      static constexpr u64 ThreadCount = 20,
+                           Chunk = GContext::gridHeight / ThreadCount;
+      for (int j = 0; j < ThreadCount; ++j)
+      {
+        thread_pool.emplace_back([j,&current_cells,&next_cells]{
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            if (y == GContext::gridHeight - 1) continue;
+            for (auto x = 0; x < GContext::gridWidth; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex + GContext::gridWidth] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            if (y == 0) continue;
+            for (auto x = 0; x < GContext::gridWidth; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex - GContext::gridWidth] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex + 1] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            for (auto x = 1; x < GContext::gridWidth; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex - 1] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            if (y == 0) continue;
+            for (auto x = 1; x < GContext::gridWidth; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex - 1 - GContext::gridWidth] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            if (y == GContext::gridHeight - 1) continue;
+            for (auto x = 1; x < GContext::gridWidth; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex - 1 + GContext::gridWidth] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            if (y == GContext::gridHeight - 1) continue;
+            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex + 1 + GContext::gridWidth] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
+            if (y == 0) continue;
+            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
+              auto cellIndex = x + y * GContext::gridWidth;
+              auto value = current_cells[cellIndex + 1 - GContext::gridWidth] == 1 ? 1 : 0;
+              next_cells[cellIndex] += value;
+            }
+          }
+        });
       }
     }
-    for (auto y = 1; y < gridHeight; ++y) {
-      for (auto x = 0; x < gridWidth; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex - gridWidth] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
-    for (auto y = 0; y < gridHeight; ++y) {
-      for (auto x = 0; x < gridWidth - 1; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex + 1] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
-    for (auto y = 0; y < gridHeight; ++y) {
-      for (auto x = 1; x < gridWidth; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex - 1] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
-    for (auto y = 1; y < gridHeight; ++y) {
-      for (auto x = 1; x < gridWidth; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex - 1 - gridWidth] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
-    for (auto y = 0; y < gridHeight - 1; ++y) {
-      for (auto x = 1; x < gridWidth; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex - 1 + gridWidth] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
-    for (auto y = 0; y < gridHeight - 1; ++y) {
-      for (auto x = 0; x < gridWidth - 1; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex + 1 + gridWidth] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
-    for (auto y = 1; y < gridHeight; ++y) {
-      for (auto x = 0; x < gridWidth - 1; ++x) {
-        auto cellIndex = x + y * gridWidth;
-        auto value = current_cells[cellIndex + 1 - gridWidth] == 1 ? 1 : 0;
-        next_cells[cellIndex] += value;
-      }
-    }
+
     // edge cases?
     for (auto x = 0; x < gridWidth; x++) {
       auto targetIndex = gridWidth * (gridHeight - 1) + x;
@@ -231,6 +249,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
       auto targetIndex = gridWidth * (gridHeight - 1) + ((gridWidth + x - 1) % gridWidth);
       next_cells[targetIndex] += value;
     }
+
     // for (auto y = 0; y < gridHeight; ++y) {
     //   auto targetIndex = gridWidth * y;
     //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
@@ -359,8 +378,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   if (updating)
     context->swap_cells();
   auto elapsed = math::Clock::Now() - begin;
-  if (elapsed < Delta)
-    SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
+  // if (elapsed < Delta)
+  //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
   begin = math::Clock::Now();
 
   return SDL_APP_CONTINUE;
