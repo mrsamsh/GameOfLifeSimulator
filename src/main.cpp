@@ -42,7 +42,7 @@ struct GContext
   } camera;
   SDL_Window* window;
   ShaderProgram program;
-  u32 VAO, VBO;
+  u32 VAO, VBO, VBO_Transform;
   using array_t = Array<i8, gridWidth * gridHeight>;
   array_t cells1;
   array_t cells2;
@@ -102,6 +102,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   glGenVertexArrays(1, &context->VAO);
   glBindVertexArray(context->VAO);
+
+  glGenBuffers(1, &context->VBO_Transform);
+  Array<math::vec2, GContext::gridWidth * GContext::gridHeight> transformations;
+  for (int y = 0; y < GContext::gridHeight; ++y)
+    for (int x = 0; x < GContext::gridWidth; ++x)
+      transformations[x + y * GContext::gridWidth] = {x, y};
+  glBindBuffer(GL_ARRAY_BUFFER, context->VBO_Transform);
+  glBufferData(GL_ARRAY_BUFFER, transformations.ByteCapacity(), transformations.data(), GL_STATIC_DRAW);
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(math::vec2), 0);
+  glVertexAttribDivisor(1, 1);
+
   glGenBuffers(1, &context->VBO);
   glBindBuffer(GL_ARRAY_BUFFER, context->VBO);
   glBufferData(GL_ARRAY_BUFFER, context->current_cells->ByteCapacity(), nullptr, GL_DYNAMIC_DRAW);
@@ -481,6 +493,7 @@ void toggleFullScreen(GContext* context)
 std::string_view GContext::VERTEX_SHADER = R"(#version 410 core
 
 layout (location = 0) in float aColor;
+layout (location = 1) in vec2  aTranslation;
 
 uniform mat4 projection;
 uniform vec2 gridSize;
@@ -495,26 +508,37 @@ const vec2 VertexPositions[4] = vec2[4](
   vec2(0.0, 0.8)
 );
 
+const vec4 palette[22] = vec4[22](
+  vec4(0.0, 0.100, 0.800, 1),
+  vec4(0.0, 0.095, 0.760, 1),
+  vec4(0.0, 0.090, 0.720, 1),
+  vec4(0.0, 0.085, 0.680, 1),
+  vec4(0.0, 0.080, 0.640, 1),
+  vec4(0.0, 0.075, 0.600, 1),
+  vec4(0.0, 0.070, 0.560, 1),
+  vec4(0.0, 0.065, 0.520, 1),
+  vec4(0.0, 0.060, 0.480, 1),
+  vec4(0.0, 0.055, 0.440, 1),
+  vec4(0.0, 0.050, 0.400, 1),
+  vec4(0.0, 0.045, 0.360, 1),
+  vec4(0.0, 0.040, 0.320, 1),
+  vec4(0.0, 0.035, 0.280, 1),
+  vec4(0.0, 0.030, 0.240, 1),
+  vec4(0.0, 0.025, 0.200, 1),
+  vec4(0.0, 0.020, 0.160, 1),
+  vec4(0.0, 0.015, 0.120, 1),
+  vec4(0.0, 0.010, 0.080, 1),
+  vec4(0.0, 0.005, 0.040, 1),
+  vec4(0, 0.0125, 0.1, 1   ),
+  vec4(1, 1, 1, 1          )
+);
+
 void main()
 {
   int i = int(aColor);
-  switch (i)
-  {
-    case 1:
-      OutColor = vec4(1, 1, 1, 1);
-      break;
-    case 0:
-      OutColor = vec4(0, 0.0125, 0.1, 1);
-      break;
-    default:
-      OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
-      break;
-  }
+  OutColor = palette[i + 20];
 
-  vec2 translation;
-  translation.x = mod(gl_InstanceID, gridSize.x) * cellSide;
-  translation.y = (int(gl_InstanceID) / int(gridSize.x)) * cellSide;
-  vec2 position = (VertexPositions[gl_VertexID] * cellSide + translation);
+  vec2 position = (VertexPositions[gl_VertexID] * cellSide + aTranslation);
   gl_Position = projection * vec4(position, 0, 1);
 }
 )";
