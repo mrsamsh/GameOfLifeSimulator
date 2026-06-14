@@ -25,7 +25,7 @@ struct GContext
   static std::string_view VERTEX_SHADER;
   static std::string_view FRAGMENT_SHADER;
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 1;
+  static constexpr i32 CellSide = 2;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -46,7 +46,7 @@ struct GContext
   SDL_GPUBuffer* cell_buffer,
                * transform_buffer;
   SDL_GPUTransferBuffer* cell_transfer_buffer;
-  using array_t = Array<i32, gridWidth * gridHeight>;
+  using array_t = Array<i8, gridWidth * gridHeight>;
   array_t cells1;
   array_t cells2;
   array_t* current_cells = &cells1;
@@ -95,17 +95,17 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
 
-  SDL_GPUTexture* texture;
+  // SDL_GPUTexture* texture;
   
-  SDL_GPUTextureCreateInfo texture_info{
-    .type = SDL_GPU_TEXTURETYPE_2D,
-    .format = SDL_GPU_TEXTUREFORMAT_R8_INT,
-    .width = GContext::gridWidth,
-    .height = GContext::gridHeight,
-    .layer_count_or_depth = 1,
-    .num_levels = 1,
-    .usage = SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ
-  };
+  // SDL_GPUTextureCreateInfo texture_info{
+  //   .type = SDL_GPU_TEXTURETYPE_2D,
+  //   .format = SDL_GPU_TEXTUREFORMAT_R8_INT,
+  //   .width = GContext::gridWidth,
+  //   .height = GContext::gridHeight,
+  //   .layer_count_or_depth = 1,
+  //   .num_levels = 1,
+  //   .usage = SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ
+  // };
 
   SDL_GPUShaderCreateInfo vshader_info {
     .code_size = GContext::VERTEX_SHADER.size(),
@@ -523,14 +523,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   {
   // update here
 
-  std::jthread th_draw([&context](){
-
   // draw here
   // first upload pass
   u64 start = SDL_GetTicksNS();
   SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context.device);
   SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
-  i32* map = (i32*)SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
+  i8* map = (i8*)SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
   memcpy(map, context.current_cells->data(), context.current_cells->ByteCapacity());
   SDL_UnmapGPUTransferBuffer(context.device, context.cell_transfer_buffer);
 
@@ -593,12 +591,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(ubo));
   SDL_DrawGPUPrimitives(render_pass, 6, context.current_cells->size(), 0, 0);
   SDL_EndGPURenderPass(render_pass);
-  SDL_SubmitGPUCommandBuffer(command_buffer);
+  SDL_SubmitGPUCommandBufferAndAcquireFence(command_buffer);
 
   u64 end = SDL_GetTicksNS() - start;
 
   std::println("elapsed: {:7.3f}", end * 1.e-6);
-  });
+
   if (updating)
   {
     calculateNext(*context.current_cells, *context.next_cells);
@@ -708,7 +706,7 @@ struct UniformBufferObject
 struct VertexIn
 {
   float2 translation[[attribute(1)]];
-  int color [[attribute(0)]];
+  char color [[attribute(0)]];
 };
 
 struct VertexOut
