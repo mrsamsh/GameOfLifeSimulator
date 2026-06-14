@@ -111,6 +111,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   glClearColor(0.0, 0.025, 0.2, 1);
   handleResize(context);
+  SDL_SyncWindow( context->window);
+  SDL_RaiseWindow(context->window);
   return SDL_APP_CONTINUE;
 }
 
@@ -275,25 +277,38 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
     //   next_cells[targetIndex + gridWidth -1] += value;
     // }
-    for (usz i = 0; i < current_cells.size(); ++i) {
-      auto cc = current_cells[i];
-      i8 sc = next_cells[i];
-      if (cc == 1) {
-        switch (sc) {
-        case 2:
-        case 3:
-          next_cells[i] = 1;
-          break;
-        default:
-          next_cells[i] = -20;
-          break;
-        }
-      } else {
-        if (sc == 3) {
-          next_cells[i] = 1;
-        } else {
-          next_cells[i] = std::min(0, cc + 1);
-        }
+
+    {
+      static constexpr int ThreadCount = 8;
+      std::vector<std::jthread> thread_pool;
+      thread_pool.reserve(ThreadCount);
+      int chunk = context->next_cells->size() / ThreadCount;
+
+      for (int j = 0; j < ThreadCount; ++j)
+      {
+        thread_pool.emplace_back([chunk,j](GContext::array_t const& current_cells, GContext::array_t& next_cells){
+          for (usz i = j * chunk; i < (j + 1) * chunk; ++i) {
+            auto cc = current_cells[i];
+            i8 sc = next_cells[i];
+            if (cc == 1) {
+              switch (sc) {
+              case 2:
+              case 3:
+                next_cells[i] = 1;
+                break;
+              default:
+                next_cells[i] = -20;
+                break;
+              }
+            } else {
+              if (sc == 3) {
+                next_cells[i] = 1;
+              } else {
+                next_cells[i] = std::min(0, cc + 1);
+              }
+            }
+          }
+        }, std::ref(current_cells), std::ref(next_cells));
       }
     }
   };
@@ -361,10 +376,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   // update here
   if (updating)
   {
-    u64 start = SDL_GetTicksNS();
     calculateNext(*context->current_cells, *context->next_cells);
-    u64 end = SDL_GetTicksNS() - start;
-    std::println("elapsed: {:7.3f} ms", end * 1.e-6);
   }
   // -----------------------------------
   glClear(GL_COLOR_BUFFER_BIT);
@@ -378,8 +390,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   if (updating)
     context->swap_cells();
   auto elapsed = math::Clock::Now() - begin;
-  // if (elapsed < Delta)
-  //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
+  if (elapsed < Delta)
+    SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
   begin = math::Clock::Now();
 
   return SDL_APP_CONTINUE;
