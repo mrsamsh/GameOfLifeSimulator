@@ -19,6 +19,7 @@ class Array
   T* raw_data = nullptr;
   // T raw_data[N];
 public:
+  using type_t = T;
   Array()
   : raw_data{0}
   {
