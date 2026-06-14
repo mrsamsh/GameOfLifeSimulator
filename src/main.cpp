@@ -402,13 +402,14 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   SDL_GL_SwapWindow(context->window);
 
   u64 end = SDL_GetTicksNS() - start;
-  std::println("elapsed: {:7.3f}", end * 1.e-6);
+  // std::println("elapsed: {:7.3f}", end * 1.e-6);
 
   if (updating)
     context->swap_cells();
   auto elapsed = math::Clock::Now() - begin;
-  if (elapsed < Delta)
-    SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
+  std::println("elapsed: {:7.3f} ms", end * 1.e-6);
+  // if (elapsed < Delta)
+  //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
   begin = math::Clock::Now();
 
   return SDL_APP_CONTINUE;
