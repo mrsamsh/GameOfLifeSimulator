@@ -86,26 +86,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
       | SDL_WINDOW_RESIZABLE
       );
   SDL_ClaimWindowForGPUDevice(context.device, context.window);
-  if (SDL_WindowSupportsGPUPresentMode(context.device, context.window, SDL_GPU_PRESENTMODE_IMMEDIATE))
-  {
-    SDL_SetGPUSwapchainParameters(context.device, context.window,
-        SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2084,
-        SDL_GPU_PRESENTMODE_IMMEDIATE);
-  }
 
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
-
-  // SDL_GPUTexture* texture;
-  
-  // SDL_GPUTextureCreateInfo texture_info{
-  //   .type = SDL_GPU_TEXTURETYPE_2D,
-  //   .format = SDL_GPU_TEXTUREFORMAT_R8_INT,
-  //   .width = GContext::gridWidth,
-  //   .height = GContext::gridHeight,
-  //   .layer_count_or_depth = 1,
-  //   .num_levels = 1,
-  //   .usage = SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ
-  // };
 
   SDL_GPUShaderCreateInfo vshader_info {
     .code_size = GContext::VERTEX_SHADER.size(),
@@ -609,8 +591,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     context.swap_cells();
   auto elapsed = math::Clock::Now() - begin;
   std::println("elapsed: {:7.3f} ms", elapsed.asNanoseconds() * 1.e-6);
-  if (elapsed < Delta)
-    SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
+  // if (elapsed < Delta)
+  //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
   begin = math::Clock::Now();
 
   return SDL_APP_CONTINUE;
@@ -716,50 +698,46 @@ struct VertexOut
   float4 color;
 };
 
+constant float2 VertexPositions[6] = {
+  {0.0, 0.0},
+  {0.8, 0.0},
+  {0.8, 0.8},
+  {0.0, 0.8},
+  {0.0, 0.0},
+  {0.8, 0.8}
+};
+constant float4 palette[] = {
+  {0.0, 0.100, 0.800, 1},
+  {0.0, 0.095, 0.760, 1},
+  {0.0, 0.090, 0.720, 1},
+  {0.0, 0.085, 0.680, 1},
+  {0.0, 0.080, 0.640, 1},
+  {0.0, 0.075, 0.600, 1},
+  {0.0, 0.070, 0.560, 1},
+  {0.0, 0.065, 0.520, 1},
+  {0.0, 0.060, 0.480, 1},
+  {0.0, 0.055, 0.440, 1},
+  {0.0, 0.050, 0.400, 1},
+  {0.0, 0.045, 0.360, 1},
+  {0.0, 0.040, 0.320, 1},
+  {0.0, 0.035, 0.280, 1},
+  {0.0, 0.030, 0.240, 1},
+  {0.0, 0.025, 0.200, 1},
+  {0.0, 0.020, 0.160, 1},
+  {0.0, 0.015, 0.120, 1},
+  {0.0, 0.010, 0.080, 1},
+  {0.0, 0.005, 0.040, 1},
+  {0, 0.0125, 0.1, 1},
+  {1, 1, 1, 1}
+};
 
 vertex VertexOut VSmain(VertexIn in [[stage_in]],
                         uint vertexID [[vertex_id]],
-                        uint instanceID [[instance_id]],
                         constant UniformBufferObject& ubo [[buffer(0)]])
 {
-  const float2 VertexPositions[6] = {
-    {0.0, 0.0},
-    {0.8, 0.0},
-    {0.8, 0.8},
-    {0.0, 0.8},
-    {0.0, 0.0},
-    {0.8, 0.8}
-  };
-  const float4 palette[] = {
-    {0.0, 0.100, 0.800, 1},
-    {0.0, 0.095, 0.760, 1},
-    {0.0, 0.090, 0.720, 1},
-    {0.0, 0.085, 0.680, 1},
-    {0.0, 0.080, 0.640, 1},
-    {0.0, 0.075, 0.600, 1},
-    {0.0, 0.070, 0.560, 1},
-    {0.0, 0.065, 0.520, 1},
-    {0.0, 0.060, 0.480, 1},
-    {0.0, 0.055, 0.440, 1},
-    {0.0, 0.050, 0.400, 1},
-    {0.0, 0.045, 0.360, 1},
-    {0.0, 0.040, 0.320, 1},
-    {0.0, 0.035, 0.280, 1},
-    {0.0, 0.030, 0.240, 1},
-    {0.0, 0.025, 0.200, 1},
-    {0.0, 0.020, 0.160, 1},
-    {0.0, 0.015, 0.120, 1},
-    {0.0, 0.010, 0.080, 1},
-    {0.0, 0.005, 0.040, 1},
-    {0, 0.0125, 0.1, 1},
-    {1, 1, 1, 1}
-  };
   VertexOut out;
   out.color = palette[in.color + 20];
 
-//  float2 translation;
-//  translation.x = (instanceID % (int)ubo.gridSize.x) * ubo.cellSide;
-//  translation.y = (int(instanceID) / int(ubo.gridSize.x)) * ubo.cellSide;
   float2 position = (VertexPositions[vertexID] * ubo.cellSide + in.translation * ubo.cellSide);
   out.position = ubo.projection * float4(position, 0, 1);
   return out;
