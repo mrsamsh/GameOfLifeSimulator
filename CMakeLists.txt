@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.20)
 
 project(GOLRenderer)
 
-add_subdirectory(libs/glad)
 add_subdirectory(libs/logging)
 add_subdirectory(libs/mathlib)
 add_subdirectory(libs/file)
@@ -17,13 +16,11 @@ set(TargetApp GameOfLife)
 
 # files to compile for executable
 add_executable(${TargetApp}
-  src/ShaderProgram.cpp
   src/main.cpp
 )
 
 target_link_libraries(${TargetApp}
   PRIVATE
-    Glad
     SDL3::SDL3
     log
     Math

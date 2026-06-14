@@ -7,13 +7,11 @@
 //
 
 #include <SDL3/SDL.h>
-#include <glad/glad.h>
 #include <Math.hpp>
 #include <MathPrint.hpp>
 #include <thread>
 
 #include "Array.hpp"
-#include "ShaderProgram.hpp"
 #include "Clock.hpp"
 
 #define RAND_CHANCE 12
@@ -31,9 +29,10 @@ struct GContext
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
   f32 current_width, current_height;
-  math::mat4 projection;
-  math::mat4 view;
-  // math::mat4 currentProjection;
+  struct {
+    math::mat4 projection;
+    math::mat4 view;
+  } matrices;
   f32 pixel_density;
   struct Camera {
     f32 zoom = 1;
@@ -41,9 +40,11 @@ struct GContext
     math::vec2 offset = math::vec2(WindowWidth, WindowHeight) / 2.f;
   } camera;
   SDL_Window* window;
-  ShaderProgram program;
-  u32 VAO, VBO;
-  using array_t = Array<i8, gridWidth * gridHeight>;
+  SDL_GPUDevice* device;
+  SDL_GPUGraphicsPipeline* pipeline;
+  SDL_GPUBuffer* cell_buffer;
+  SDL_GPUTransferBuffer* cell_transfer_buffer;
+  using array_t = Array<i32, gridWidth * gridHeight>;
   array_t cells1;
   array_t cells2;
   array_t* current_cells = &cells1;
@@ -54,6 +55,7 @@ struct GContext
     next_cells = temp;
   }
   bool space_state[2] = {}, reset_state[2] = {}, step_state[2] = {};
+  SDL_GPUViewport viewport;
 };
 
 void updateCamera(GContext* context);
@@ -73,43 +75,102 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   SDL_Init(SDL_INIT_VIDEO);
   bool const* keyboard = SDL_GetKeyboardState(nullptr);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  context->device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, false, 0);
   context->window = SDL_CreateWindow(
       "Test",
       GContext::WindowWidth, GContext::WindowHeight,
-      SDL_WINDOW_OPENGL
-      | (GContext::high_dpi ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0)
+      (GContext::high_dpi ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0)
       // | SDL_WINDOW_FULLSCREEN
       | SDL_WINDOW_RESIZABLE
       );
-  SDL_GL_CreateContext(context->window);
-  gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
-  printf("%s\n", glGetString(GL_VERSION));
+  SDL_ClaimWindowForGPUDevice(context->device, context->window);
 
   context->pixel_density = SDL_GetWindowPixelDensity(context->window);
 
-  context->program.loadProgramFromString({
-      {GL_VERTEX_SHADER,   GContext::VERTEX_SHADER},
-      {GL_FRAGMENT_SHADER, GContext::FRAGMENT_SHADER}
-  });
+  SDL_GPUShaderCreateInfo vshader_info {
+    .code_size = GContext::VERTEX_SHADER.size(),
+    .code = (u8 const*)GContext::VERTEX_SHADER.data(),
+    .entrypoint = "VSmain",
+    .format = SDL_GPU_SHADERFORMAT_MSL,
+    .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+    .num_uniform_buffers = 1,
+  };
+  SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(context->device, &vshader_info);
 
-  context->projection = math::mat4::ortho(0, GContext::WindowWidth, 0, GContext::WindowHeight, -10, 10);
-  context->view = math::mat4::Identity();
-  // context->currentProjection = context->projection;
-  context->program.use().set("projection", context->projection * context->view);
-  context->program.use().set("gridSize", math::vec2(GContext::gridWidth, GContext::gridHeight));
-  context->program.use().set("cellSide", (f32)context->CellSide);
+  SDL_GPUShaderCreateInfo fshader_info {
+    .code_size = GContext::FRAGMENT_SHADER.size(),
+    .code = (u8 const*)GContext::FRAGMENT_SHADER.data(),
+    .entrypoint = "FSmain",
+    .format = SDL_GPU_SHADERFORMAT_MSL,
+    .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+  };
 
-  glGenVertexArrays(1, &context->VAO);
-  glBindVertexArray(context->VAO);
-  glGenBuffers(1, &context->VBO);
-  glBindBuffer(GL_ARRAY_BUFFER, context->VBO);
-  glBufferData(GL_ARRAY_BUFFER, context->current_cells->ByteCapacity(), nullptr, GL_DYNAMIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 1, GL_BYTE, false, sizeof(i8), 0);
-  glVertexAttribDivisor(0, 1);
+  SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(context->device, &fshader_info);
 
-  glClearColor(0.0, 0.025, 0.2, 1);
+  SDL_GPUVertexBufferDescription vb_desc = {
+    .slot = 0,
+    .pitch = sizeof(i32),
+    .input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
+  };
+
+  SDL_GPUVertexAttribute v_attrib = {
+    .location = 0,
+    .buffer_slot = 0,
+    .format = SDL_GPU_VERTEXELEMENTFORMAT_INT,
+    .offset = 0
+  };
+
+  SDL_GPUVertexInputState vertex_input_state = {
+    .vertex_buffer_descriptions = &vb_desc,
+    .num_vertex_buffers = 1,
+    .vertex_attributes = &v_attrib,
+    .num_vertex_attributes = 1
+  };
+
+  SDL_GPUColorTargetDescription color_target_desc = {
+    .format = SDL_GetGPUSwapchainTextureFormat(context->device, context->window),
+  };
+
+  SDL_GPUGraphicsPipelineTargetInfo pipeline_target_info = {
+    .color_target_descriptions = &color_target_desc,
+    .num_color_targets = 1,
+  };
+
+  SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
+    .vertex_shader = vertex_shader,
+    .fragment_shader = fragment_shader,
+    .vertex_input_state = vertex_input_state,
+    .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+    .target_info = pipeline_target_info
+  };
+
+
+  context->pipeline = SDL_CreateGPUGraphicsPipeline(context->device, &pipeline_info);
+  SDL_ReleaseGPUShader(context->device, vertex_shader);
+  SDL_ReleaseGPUShader(context->device, fragment_shader);
+
+  context->matrices.projection = math::mat4::ortho(0, GContext::WindowWidth, 0, GContext::WindowHeight, -10, 10);
+  context->matrices.view = math::mat4::Identity();
+
+  SDL_GPUBufferCreateInfo buffer_create_info{
+    .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+    .size = GContext::array_t::ByteCapacity(),
+  };
+
+  context->cell_buffer = SDL_CreateGPUBuffer(
+      context->device,
+      &buffer_create_info
+      );
+
+  SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
+    .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+    .size = GContext::array_t::ByteCapacity()
+  };
+
+  context->cell_transfer_buffer = SDL_CreateGPUTransferBuffer(
+      context->device, &transfer_buffer_create_info
+      );
+
   handleResize(context);
   SDL_SyncWindow( context->window);
   SDL_RaiseWindow(context->window);
@@ -347,7 +408,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   this_time = (state & SDL_BUTTON_LMASK) != 0;
   // mousepos = mouseToNormal.transform(mousepos);
   if (this_time && !last_time) {
-    mousepos = context->view.inverse().transform(mousepos);
+    mousepos = context->matrices.view.inverse().transform(mousepos);
     u32 xx = floor(mousepos.x) / GContext::CellSide;
     u32 yy = floor(mousepos.y) / GContext::CellSide;
     u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
@@ -379,14 +440,75 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     calculateNext(*context->current_cells, *context->next_cells);
   }
   // -----------------------------------
-  glClear(GL_COLOR_BUFFER_BIT);
 
-  glBindVertexArray(context->VAO);
-  glBindBuffer(GL_ARRAY_BUFFER, context->VBO);
-  glBufferSubData(GL_ARRAY_BUFFER, 0, context->current_cells->ByteCapacity(), context->current_cells->data());
-  glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, context->current_cells->size());
+  // draw here
+  // first upload pass
+  SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context->device);
+  SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+  i32* map = (i32*)SDL_MapGPUTransferBuffer(context->device, context->cell_transfer_buffer, false);
+  memcpy(map, context->current_cells->data(), context->current_cells->ByteCapacity());
+  SDL_UnmapGPUTransferBuffer(context->device, context->cell_transfer_buffer);
 
-  SDL_GL_SwapWindow(context->window);
+  SDL_GPUTransferBufferLocation location{
+    .transfer_buffer = context->cell_transfer_buffer,
+    .offset = 0
+  };
+  SDL_GPUBufferRegion region{
+    .buffer = context->cell_buffer,
+    .offset = 0,
+    .size = GContext::array_t::ByteCapacity()
+  };
+
+  SDL_UploadToGPUBuffer(
+      copy_pass,
+      &location,
+      &region,
+      false
+      );
+
+  SDL_EndGPUCopyPass(copy_pass);
+
+  SDL_GPUTexture* swapchain_texture;
+  u32 width, height;
+  SDL_WaitAndAcquireGPUSwapchainTexture(
+      command_buffer,
+      context->window,
+      &swapchain_texture,
+      &width,
+      &height
+      );
+  SDL_GPUColorTargetInfo color_target_info{
+    .texture = swapchain_texture,
+    .clear_color = {0.f, 0.025f, 0.2f, 1.f},
+    .load_op = SDL_GPU_LOADOP_CLEAR,
+    .store_op = SDL_GPU_STOREOP_STORE,
+  };
+  SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
+      command_buffer,
+      &color_target_info,
+      1,
+      nullptr
+      );
+
+  SDL_BindGPUGraphicsPipeline(render_pass, context->pipeline);
+  SDL_GPUBufferBinding buffer_bind{
+    .buffer = context->cell_buffer,
+  };
+  SDL_BindGPUVertexBuffers(render_pass, 0, &buffer_bind, 1);
+
+  SDL_SetGPUViewport(render_pass, &context->viewport);
+
+  struct {
+    math::mat4 projection;
+    math::vec2 gridSize;
+    f32        cellSide;
+  } ubo = {context->matrices.projection * context->matrices.view, {GContext::gridWidth , GContext::gridHeight}, GContext::CellSide};
+
+  SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(ubo));
+  SDL_DrawGPUPrimitives(render_pass, 6, context->current_cells->size(), 0, 0);
+  SDL_EndGPURenderPass(render_pass);
+  SDL_SubmitGPUCommandBuffer(command_buffer);
+
   if (updating)
     context->swap_cells();
   auto elapsed = math::Clock::Now() - begin;
@@ -400,9 +522,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 void SDL_AppQuit(void* appstate, SDL_AppResult result)
 {
   GContext* context = (GContext*)appstate;
-  delete context;
+  SDL_ReleaseGPUBuffer(context->device, context->cell_buffer);
+  SDL_ReleaseGPUTransferBuffer(context->device, context->cell_transfer_buffer);
+  SDL_DestroyGPUDevice(context->device);
   SDL_DestroyWindow(context->window);
   SDL_Quit();
+  delete context;
 }
 
 void updateCamera(GContext* context)
@@ -430,11 +555,10 @@ void updateCamera(GContext* context)
       max.y - apparent_offset.y
   );
 
-  context->view = math::mat4::Identity()
+  context->matrices.view = math::mat4::Identity()
     .translate({camera.offset.x, camera.offset.y, 0})
     .scale({camera.zoom, camera.zoom, 1})
     .translate({-camera.target.x, -camera.target.y, 0});
-  context->program.set("projection", context->projection * context->view);
 }
 
 void reset_cells(GContext::array_t& cells, unsigned int seed) {
@@ -453,7 +577,7 @@ void handleResize(GContext* context)
 {
   i32 width, height;
   SDL_GetWindowSize(context->window, &width, &height);
-  context->projection = math::mat4::ortho(
+  context->matrices.projection = math::mat4::ortho(
       0, width,
       0, height,
       -10, 10
@@ -463,7 +587,7 @@ void handleResize(GContext* context)
   context->camera.offset = math::vec2(width, height) / 2.f;
   updateCamera(context);
   SDL_GetWindowSizeInPixels(context->window, &width, &height);
-  glViewport(0, 0, width, height);
+  context->viewport = {0, 0, (f32)width, (f32)height};
 }
 
 void toggleFullScreen(GContext* context)
@@ -473,55 +597,78 @@ void toggleFullScreen(GContext* context)
   SDL_SetWindowFullscreen(context->window, !(flags & SDL_WINDOW_FULLSCREEN));
 }
 
-std::string_view GContext::VERTEX_SHADER = R"(#version 410 core
+std::string_view GContext::VERTEX_SHADER = R"(
+#include <metal_stdlib>
+using namespace metal;
 
-layout (location = 0) in float aColor;
-
-uniform mat4 projection;
-uniform vec2 gridSize;
-uniform float cellSide;
-
-out vec4 OutColor;
-
-const vec2 VertexPositions[4] = vec2[4](
-  vec2(0.0, 0.0),
-  vec2(0.8, 0.0),
-  vec2(0.8, 0.8),
-  vec2(0.0, 0.8)
-);
-
-void main()
+struct UniformBufferObject
 {
-  int i = int(aColor);
-  switch (i)
+  float4x4 projection;
+  float2   gridSize;
+  float    cellSide;
+};
+
+struct VertexIn
+{
+  int color [[attribute(0)]];
+};
+
+struct VertexOut
+{
+  float4 position [[position]];
+  float4 color;
+};
+
+
+vertex VertexOut VSmain(VertexIn in [[stage_in]],
+                        uint vertexID [[vertex_id]],
+                        uint instanceID [[instance_id]],
+                        constant UniformBufferObject& ubo [[buffer(0)]])
+{
+  const float2 VertexPositions[6] = {
+    {0.0, 0.0},
+    {0.8, 0.0},
+    {0.8, 0.8},
+    {0.0, 0.8},
+    {0.0, 0.0},
+    {0.8, 0.8}
+  };
+  VertexOut out;
+  switch (in.color)
   {
     case 1:
-      OutColor = vec4(1, 1, 1, 1);
+      out.color = float4(1, 1, 1, 1);
       break;
     case 0:
-      OutColor = vec4(0, 0.0125, 0.1, 1);
+      out.color = float4(0, 0.0125, 0.1, 1);
       break;
     default:
-      OutColor = vec4(0, 0.1, 0.8, 1) * aColor / -20.0;
+      out.color = float4(0, 0.1, 0.8, 1) * in.color / -20.0;
       break;
   }
 
-  vec2 translation;
-  translation.x = mod(gl_InstanceID, gridSize.x) * cellSide;
-  translation.y = (int(gl_InstanceID) / int(gridSize.x)) * cellSide;
-  vec2 position = (VertexPositions[gl_VertexID] * cellSide + translation);
-  gl_Position = projection * vec4(position, 0, 1);
+  float2 translation;
+  translation.x = (instanceID % (int)ubo.gridSize.x) * ubo.cellSide;
+  translation.y = (int(instanceID) / int(ubo.gridSize.x)) * ubo.cellSide;
+  float2 position = (VertexPositions[vertexID] * ubo.cellSide + translation);
+  out.position = ubo.projection * float4(position, 0, 1);
+  return out;
 }
 )";
 
-std::string_view GContext::FRAGMENT_SHADER = R"(#version 410 core
+std::string_view GContext::FRAGMENT_SHADER = R"(
+#include <metal_stdlib>
+using namespace metal;
 
-in vec4 OutColor;
-
-out vec4 FragColor;
-
-void main()
+struct VertexOut
 {
-FragColor = OutColor;
+  float4 position [[position]];
+  float4 color;
+};
+
+
+fragment float4 FSmain(VertexOut in [[stage_in]])
+{
+  return in.color;
 }
 )";
