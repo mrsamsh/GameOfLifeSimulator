@@ -65,6 +65,8 @@ struct GContext
     next_cells = temp;
   }
   bool space_state[2] = {}, reset_state[2] = {}, step_state[2] = {};
+  u64 start_time;
+  u64 frame_counter = 0;
   SDL_GPUViewport viewport;
 };
 
@@ -274,6 +276,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   handleResize(context);
   SDL_SyncWindow( context.window);
   SDL_RaiseWindow(context.window);
+  context.start_time = SDL_GetTicksNS();
   return SDL_APP_CONTINUE;
 }
 
@@ -302,15 +305,13 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
   GContext& context = *(GContext*)appstate;
-  static math::Time begin = 0_sec;
-
   auto calculateNext = [&](GContext::array_t const& current_cells, GContext::array_t& next_cells) {
     const int gridWidth  = GContext::WindowWidth  / context.CellSide;
     const int gridHeight = GContext::WindowHeight / context.CellSide;
     std::fill(next_cells.begin(), next_cells.end(), 0);
     {
       std::vector<std::jthread> thread_pool;
-      static constexpr u64 ThreadCount = 20,
+      static constexpr u64 ThreadCount = 8,
                            Chunk = GContext::gridHeight / ThreadCount;
       for (int j = 0; j < ThreadCount; ++j)
       {
@@ -540,7 +541,6 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   // draw here
   // first upload pass
     std::thread th_draw([&context](){
-      u64 start = SDL_GetTicksNS();
       SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context.device);
       SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
       void* map = SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
@@ -607,9 +607,6 @@ SDL_AppResult SDL_AppIterate(void* appstate)
       SDL_DrawGPUPrimitives(render_pass, 6, context.current_cells->size(), 0, 0);
       SDL_EndGPURenderPass(render_pass);
       SDL_SubmitGPUCommandBuffer(command_buffer);
-
-      u64 end = SDL_GetTicksNS() - start;
-      // std::println("elapsed: {:7.3f}", end * 1.e-6);
     });
 
 
@@ -624,18 +621,21 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   if (updating)
     context.swap_cells();
-  auto elapsed = math::Clock::Now() - begin;
-  // std::println("elapsed: {:7.3f} ms", elapsed.asNanoseconds() * 1.e-6);
   // if (elapsed < Delta)
   //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
-  begin = math::Clock::Now();
 
+  context.frame_counter++;
   return SDL_APP_CONTINUE;
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result)
 {
   GContext& context = *(GContext*)appstate;
+  u64 elapsed = SDL_GetTicksNS() - context.start_time;
+  u64 ns_per_frame = elapsed / context.frame_counter;
+  std::println("total elapsed: {:7.3} sec.", elapsed * 1.e-9);
+  std::println("total frames: {}, ms per frame: {}, fps: {}",
+      context.frame_counter, ns_per_frame * 1.e-6, context.frame_counter / (elapsed * 1.e-9));
   SDL_ReleaseGPUBuffer(context.device, context.cell_buffer);
   SDL_ReleaseGPUTransferBuffer(context.device, context.cell_transfer_buffer);
   SDL_DestroyGPUDevice(context.device);
