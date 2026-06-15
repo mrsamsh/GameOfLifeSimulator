@@ -33,7 +33,7 @@ struct GContext
   static const u8* FRAGMENT_SHADER_DXIL;
   static const u64 FRAGMENT_SHADER_DXIL_SIZE;
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 1;
+  static constexpr i32 CellSide = 3;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -633,9 +633,10 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result)
   GContext& context = *(GContext*)appstate;
   u64 elapsed = SDL_GetTicksNS() - context.start_time;
   u64 ns_per_frame = elapsed / context.frame_counter;
-  std::println("total elapsed: {:7.3} sec.", elapsed * 1.e-9);
-  std::println("total frames: {}, ms per frame: {}, fps: {}",
-      context.frame_counter, ns_per_frame * 1.e-6, context.frame_counter / (elapsed * 1.e-9));
+  std::println("total elapsed   : {:7.3} sec", elapsed * 1.e-9);
+  std::println("total frames    : {:3d} frame", context.frame_counter);
+  std::println("avg ms per frame: {:7.3f} ms", ns_per_frame * 1.e-6);
+  std::println("fps             : {:7.3f}", context.frame_counter / (elapsed * 1.e-9));
   SDL_ReleaseGPUBuffer(context.device, context.cell_buffer);
   SDL_ReleaseGPUTransferBuffer(context.device, context.cell_transfer_buffer);
   SDL_DestroyGPUDevice(context.device);
