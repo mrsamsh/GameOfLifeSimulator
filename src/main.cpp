@@ -609,7 +609,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
       SDL_SubmitGPUCommandBuffer(command_buffer);
 
       u64 end = SDL_GetTicksNS() - start;
-      std::println("elapsed: {:7.3f}", end * 1.e-6);
+      // std::println("elapsed: {:7.3f}", end * 1.e-6);
     });
 
 
