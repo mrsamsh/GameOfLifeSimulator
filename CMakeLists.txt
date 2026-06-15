@@ -24,7 +24,6 @@ target_link_libraries(${TargetApp}
     SDL3::SDL3
     log
     Math
-    fileio
 )
 
 # include directory
@@ -58,5 +57,15 @@ PROPERTIES
   MACOSX_BUNDLE   "TRUE"
 )
 endif()
+
+if (WIN32)
+  add_custom_target(CompileDXShaders ALL
+    COMMENT "Compiling DX12 shaders"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
+    COMMAND cmd /c "${CMAKE_SOURCE_DIR}/shaders/compile_shaders.bat"
+  )
+  add_dependencies(${TargetName} CompileDXShaders)
+endif()
+
 
 add_dependencies(${TargetName} CopyCompileCommands)

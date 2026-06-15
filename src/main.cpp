@@ -10,7 +10,9 @@
 #include <Math.hpp>
 #include <MathPrint.hpp>
 #include <thread>
-#include <print>
+// #include <print>
+#include <cstring>
+#include <string_view>
 
 #include "Array.hpp"
 #include "Clock.hpp"
@@ -22,8 +24,12 @@
 
 struct GContext
 {
-  static std::string_view VERTEX_SHADER;
-  static std::string_view FRAGMENT_SHADER;
+  static std::string_view VERTEX_SHADER_MSL;
+  static std::string_view FRAGMENT_SHADER_MSL;
+  static const u8* VERTEX_SHADER_DXIL;
+  static const u64 VERTEX_SHADER_DXIL_SIZE;
+  static const u8* FRAGMENT_SHADER_DXIL;
+  static const u64 FRAGMENT_SHADER_DXIL_SIZE;
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
   static constexpr i32 CellSide = 1;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
@@ -46,7 +52,7 @@ struct GContext
   SDL_GPUBuffer* cell_buffer,
                * transform_buffer;
   SDL_GPUTransferBuffer* cell_transfer_buffer;
-  using array_t = Array<i8, gridWidth * gridHeight>;
+  using array_t = Array<i32, gridWidth * gridHeight>;
   array_t cells1;
   array_t cells2;
   array_t* current_cells = &cells1;
@@ -77,7 +83,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   SDL_Init(SDL_INIT_VIDEO);
   bool const* keyboard = SDL_GetKeyboardState(nullptr);
-  context.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, true, 0);
+  context.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_DXIL, true, 0);
   context.window = SDL_CreateWindow(
       "Test",
       GContext::WindowWidth, GContext::WindowHeight,
@@ -89,21 +95,49 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
 
+  const u8* vertex_shader_source{0};
+  const u8* fragment_shader_source{0};
+  u64 vertex_shader_source_size{0};
+  u64 fragment_shader_source_size{0};
+  auto format = SDL_GetGPUShaderFormats(context.device);
+
+  if (format & SDL_GPU_SHADERFORMAT_MSL)
+  {
+    vertex_shader_source = (const u8*)context.VERTEX_SHADER_MSL.data();
+    vertex_shader_source_size = context.VERTEX_SHADER_MSL.size();
+    fragment_shader_source = (const u8*)context.FRAGMENT_SHADER_MSL.data();
+    fragment_shader_source_size = context.FRAGMENT_SHADER_MSL.size();
+    format = SDL_GPU_SHADERFORMAT_MSL;
+  }
+  else if (format & SDL_GPU_SHADERFORMAT_DXIL)
+  {
+    vertex_shader_source = (const u8*)context.VERTEX_SHADER_DXIL;
+    vertex_shader_source_size = context.VERTEX_SHADER_DXIL_SIZE;
+    fragment_shader_source = (const u8*)context.FRAGMENT_SHADER_DXIL;
+    fragment_shader_source_size = context.FRAGMENT_SHADER_DXIL_SIZE;
+    format = SDL_GPU_SHADERFORMAT_DXIL;
+  }
+  else
+  {
+    puts("Unsupported");
+    exit(0);
+  }
+
   SDL_GPUShaderCreateInfo vshader_info {
-    .code_size = GContext::VERTEX_SHADER.size(),
-    .code = (u8 const*)GContext::VERTEX_SHADER.data(),
+    .code_size = vertex_shader_source_size,
+    .code = vertex_shader_source,
     .entrypoint = "VSmain",
-    .format = SDL_GPU_SHADERFORMAT_MSL,
+    .format = format,
     .stage = SDL_GPU_SHADERSTAGE_VERTEX,
     .num_uniform_buffers = 1,
   };
   SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(context.device, &vshader_info);
 
   SDL_GPUShaderCreateInfo fshader_info {
-    .code_size = GContext::FRAGMENT_SHADER.size(),
-    .code = (u8 const*)GContext::FRAGMENT_SHADER.data(),
+    .code_size = fragment_shader_source_size,
+    .code = fragment_shader_source,
     .entrypoint = "FSmain",
-    .format = SDL_GPU_SHADERFORMAT_MSL,
+    .format = format,
     .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
   };
 
@@ -577,7 +611,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
       SDL_SubmitGPUCommandBuffer(command_buffer);
 
       u64 end = SDL_GetTicksNS() - start;
-      std::println("elapsed: {:7.3f}", end * 1.e-6);
+      // std::println("elapsed: {:7.3f}", end * 1.e-6);
     });
 
 
@@ -678,7 +712,7 @@ void toggleFullScreen(GContext& context)
   SDL_SetWindowFullscreen(context.window, !(flags & SDL_WINDOW_FULLSCREEN));
 }
 
-std::string_view GContext::VERTEX_SHADER = R"(
+std::string_view GContext::VERTEX_SHADER_MSL = R"(
 #include <metal_stdlib>
 using namespace metal;
 
@@ -692,7 +726,7 @@ struct UniformBufferObject
 struct VertexIn
 {
   float2 translation[[attribute(1)]];
-  char color [[attribute(0)]];
+  int color [[attribute(0)]];
 };
 
 struct VertexOut
@@ -747,7 +781,7 @@ vertex VertexOut VSmain(VertexIn in [[stage_in]],
 }
 )";
 
-std::string_view GContext::FRAGMENT_SHADER = R"(
+std::string_view GContext::FRAGMENT_SHADER_MSL = R"(
 #include <metal_stdlib>
 using namespace metal;
 
@@ -763,3 +797,12 @@ fragment float4 FSmain(VertexOut in [[stage_in]])
   return in.color;
 }
 )";
+
+#include "../shaders/default_vert.hpp"
+const u8* GContext::VERTEX_SHADER_DXIL = default_vert_dxil;
+const u64 GContext::VERTEX_SHADER_DXIL_SIZE = default_vert_dxil_len;
+
+#include "../shaders/default_frag.hpp"
+const u8* GContext::FRAGMENT_SHADER_DXIL = default_frag_dxil;
+const u64 GContext::FRAGMENT_SHADER_DXIL_SIZE = default_vert_dxil_len;
+
