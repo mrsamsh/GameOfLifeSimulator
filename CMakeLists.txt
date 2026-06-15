@@ -19,11 +19,18 @@ add_executable(${TargetApp}
   src/main.cpp
 )
 
+set(TargetSpecificLibs "")
+
+if(WIN32)
+  set(TargetSpecificLibs stdc++exp)
+endif()
+
 target_link_libraries(${TargetApp}
   PRIVATE
     SDL3::SDL3
     log
     Math
+    ${TargetSpecificLibs}
 )
 
 # include directory

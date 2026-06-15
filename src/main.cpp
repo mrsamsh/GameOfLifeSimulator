@@ -10,7 +10,7 @@
 #include <Math.hpp>
 #include <MathPrint.hpp>
 #include <thread>
-// #include <print>
+#include <print>
 #include <cstring>
 #include <string_view>
 
@@ -609,7 +609,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
       SDL_SubmitGPUCommandBuffer(command_buffer);
 
       u64 end = SDL_GetTicksNS() - start;
-      // std::println("elapsed: {:7.3f}", end * 1.e-6);
+      std::println("elapsed: {:7.3f}", end * 1.e-6);
     });
 
 
@@ -802,5 +802,5 @@ const u64 GContext::VERTEX_SHADER_DXIL_SIZE = default_vert_dxil_len;
 
 #include "../shaders/default_frag.hpp"
 const u8* GContext::FRAGMENT_SHADER_DXIL = default_frag_dxil;
-const u64 GContext::FRAGMENT_SHADER_DXIL_SIZE = default_vert_dxil_len;
+const u64 GContext::FRAGMENT_SHADER_DXIL_SIZE = default_frag_dxil_len;
 
