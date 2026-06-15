@@ -22,6 +22,8 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
+#define ARRAY_COUNT(array) (sizeof(array) / sizeof(*(array)))
+
 struct GContext
 {
   static std::string_view VERTEX_SHADER_MSL;
@@ -171,32 +173,28 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     }
   };
 
-  SDL_GPUVertexInputState vertex_input_state = {
-    .vertex_buffer_descriptions = vb_desc,
-    .num_vertex_buffers = 2,
-    .vertex_attributes = v_attrib,
-    .num_vertex_attributes = 2
-  };
-
   SDL_GPUColorTargetDescription color_target_desc = {
     .format = SDL_GetGPUSwapchainTextureFormat(context.device, context.window),
-  };
-
-  SDL_GPUGraphicsPipelineTargetInfo pipeline_target_info = {
-    .color_target_descriptions = &color_target_desc,
-    .num_color_targets = 1,
   };
 
   SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
     .vertex_shader = vertex_shader,
     .fragment_shader = fragment_shader,
-    .vertex_input_state = vertex_input_state,
+    .vertex_input_state = {
+      .vertex_buffer_descriptions = vb_desc,
+      .num_vertex_buffers = ARRAY_COUNT(vb_desc),
+      .vertex_attributes = v_attrib,
+      .num_vertex_attributes = ARRAY_COUNT(v_attrib),
+    },
     .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-    .target_info = pipeline_target_info
+    .target_info = {
+      .color_target_descriptions = &color_target_desc,
+      .num_color_targets = 1
+    }
   };
 
-
   context.pipeline = SDL_CreateGPUGraphicsPipeline(context.device, &pipeline_info);
+
   SDL_ReleaseGPUShader(context.device, vertex_shader);
   SDL_ReleaseGPUShader(context.device, fragment_shader);
 
