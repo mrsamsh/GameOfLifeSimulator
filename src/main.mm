@@ -60,8 +60,10 @@ struct GContext
   id<MTLLibrary> metal_default_library;
   id<MTLRenderPipelineState> pipeline;
   id<CAMetalDrawable> metal_drawable;
-  id<MTLBuffer> cells1,
-                cells2,
+  id<MTLBuffer> cells1[3],
+                cells2[3],
+                *current_buffer = &cells1[0],
+                *next_buffer = &cells2[0],
                 ubo,
                 translations;
   id<MTLCommandQueue> command_queue;
@@ -70,13 +72,45 @@ struct GContext
   i8 *current_cells,
      *next_cells;
   void swap_cells() {
-    i8* temp = current_cells;
-    current_cells = next_cells;
-    next_cells = temp;
+    buffer_state ++;
+    switch (buffer_state)
+    {
+      case 0:
+        current_buffer = &cells1[0];
+        next_buffer    = &cells2[0];
+        break;
+      case 1:
+        current_buffer = &cells2[0];
+        next_buffer    = &cells1[1];
+        break;
+      case 2:
+        current_buffer = &cells1[1];
+        next_buffer    = &cells2[1];
+        break;
+      case 3:
+        current_buffer = &cells2[1];
+        next_buffer    = &cells1[2];
+        break;
+      case 4:
+        current_buffer = &cells1[2];
+        next_buffer    = &cells2[2];
+        break;
+      case 5:
+        current_buffer = &cells2[2];
+        next_buffer    = &cells1[0];
+        buffer_state = -1;
+        break;
+      default:
+        assert(false && "Shouldnt reach here");
+        break;
+    }
+    current_cells = (i8*)(*current_buffer).contents;
+    next_cells    = (i8*)(*next_buffer).contents;
   }
   bool space_state[2] = {}, reset_state[2] = {}, step_state[2] = {};
   u64 start_time;
   u64 frame_counter = 0;
+  i8 buffer_state = 0;
   MTLViewport viewport;
 };
 
@@ -119,13 +153,16 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
 
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
-  context.cells1 = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
-                                                     options:MTLResourceStorageModeManaged];
-  context.cells2 = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
-                                                     options:MTLResourceStorageModeManaged];
+  for (int i = 0; i < 3; ++i)
+  {
+    context.cells1[i] = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
+                                                       options:MTLResourceStorageModeShared];
+    context.cells2[i] = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
+                                                       options:MTLResourceStorageModeShared];
+  }
 
-  context.current_cells = (i8*)context.cells1.contents;
-  context.next_cells = (i8*)context.cells2.contents;
+  context.current_cells = (i8*)context.cells1[0].contents;
+  context.next_cells = (i8*)context.cells2[0].contents;
 
   reset_cells(context.current_cells);
 
@@ -430,6 +467,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   // draw here
   // first upload pass
+
+  u64 beginning = SDL_GetTicksNS();
   context.metal_drawable = [context.metal_layer nextDrawable];
   context.command_buffer = [context.command_queue commandBuffer];
   MTLRenderPassDescriptor *render_pass_desc = [MTLRenderPassDescriptor new];
@@ -447,17 +486,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   ubo->gridSize = {GContext::gridWidth, GContext::gridHeight};
   ubo->cellSide = GContext::CellSide;
   [render_command_encoder setVertexBuffer:context.ubo offset:0 atIndex:0];
-  if (context.current_cells == context.cells1.contents)
-  {
-    [context.cells1 didModifyRange:NSMakeRange(0, sizeof(i8) * context.cells_buffer_capacity)];
-    [render_command_encoder setVertexBuffer:context.cells1 offset:0 atIndex:1];
-  }
-  else
-  {
-    [context.cells2 didModifyRange:NSMakeRange(0, sizeof(i8) * context.cells_buffer_capacity)];
-    [render_command_encoder setVertexBuffer:context.cells2 offset:0 atIndex:1];
-  }
-
+  [render_command_encoder setVertexBuffer:*context.current_buffer offset:0 atIndex:1];
   [render_command_encoder setVertexBuffer:context.translations offset:0 atIndex:2];
 
   [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle
@@ -468,16 +497,17 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   [render_command_encoder endEncoding];
   [context.command_buffer presentDrawable:context.metal_drawable];
   [context.command_buffer commit];
-  [context.command_buffer waitUntilCompleted];
+  // [context.command_buffer waitUntilScheduled];
   [render_pass_desc release];
+  NSLog(@"rendering elapsed: %f ms, %d", (SDL_GetTicksNS() - beginning) * 1.e-6, context.buffer_state);
 
 
+  beginning = SDL_GetTicksNS();
   if (updating)
   {
     calculateNext(context.current_cells, context.next_cells);
   }
-
-    // th_draw.join();
+  NSLog(@"updating elapsed: %f ms, %d", (SDL_GetTicksNS() - beginning) * 1.e-6, context.buffer_state);
 
   }
 
