@@ -39,7 +39,7 @@ struct UniformBufferObject
 struct GContext
 {
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 4;
+  static constexpr i32 CellSide = 2;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -83,7 +83,7 @@ void updateCamera(GContext& context);
 void handleResize(GContext& context);
 void toggleFullScreen(GContext& context);
 
-void reset_cells(i8* cells);
+void reset_cells(i8* cells, i8* buffer);
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 {
@@ -123,7 +123,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
   context.pixels = [context.metal_device newBufferWithLength:sizeof(i8) * context.gridWidth * context.gridHeight options:MTLResourceStorageModeShared];
 
-  reset_cells(context.current_cells);
+  reset_cells(context.current_cells, reinterpret_cast<i8*>(context.pixels.contents));
 
   context.ubo = [context.metal_device newBufferWithLength:sizeof(UniformBufferObject)
                                                   options:MTLResourceStorageModeShared];
@@ -272,7 +272,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     }
 
 
-    i8 *pixels = (i8*)context.pixels.contents;
+    i8 *pixels = reinterpret_cast<i8*>(context.pixels.contents);
     for (usz i = 0; i < gridWidth * gridHeight; ++i) {
       auto cc = current_cells[i];
       i8 sc = next_cells[i];
@@ -314,7 +314,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   reset[1] = keyboard[SDL_SCANCODE_R];
 
   if (reset[1] && !reset[0]) {
-    reset_cells(context.current_cells);
+    reset_cells(context.current_cells, reinterpret_cast<i8*>(context.pixels.contents));
   }
 
   bool* step = context.step_state;
@@ -340,7 +340,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
     auto& clicked_cell = (context.current_cells)[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
-    auto& pixel = ((i8*)(context.pixels.contents))[i];
+    auto& pixel = reinterpret_cast<i8*>(context.pixels.contents)[i];
     pixel = pixel == 1 ? 0 : 1;
   }
 
@@ -465,12 +465,14 @@ void updateCamera(GContext& context)
     .translate({-camera.target.x, -camera.target.y, 0});
 }
 
-void reset_cells(i8* cells) {
+void reset_cells(i8* cells, i8* pixels) {
   for (int i = 0; i < GContext::cells_buffer_capacity; ++i) {
     if (rand() % RAND_CHANCE == 3) {
       cells[i] = 1;
+      pixels[i] = 1;
     } else {
       cells[i] = 0;
+      pixels[i] = 0;
     }
   }
 }
