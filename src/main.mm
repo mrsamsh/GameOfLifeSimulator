@@ -114,7 +114,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   CGFloat scale = context.high_dpi ? 2 : 1;
   // CGFloat scale = context.metal_window.screen.backingScaleFactor ?: 1.0;
   context.metal_layer.contentsScale = scale;
-  printf("%f\n", scale);
   NSView *view = context.metal_window.contentView;
   CGSize drawable_size = CGSizeMake(view.frame.size.width * scale, view.frame.size.height * scale);
   context.metal_layer.drawableSize = drawable_size;
