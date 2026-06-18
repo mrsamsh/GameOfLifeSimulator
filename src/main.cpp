@@ -148,14 +148,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(context.device, &fshader_info);
 
-  // SDL_GPUVertexBufferDescription vb_desc[] = {
-  //   {
-  //     .slot = 0,
-  //     .pitch = sizeof(GContext::array_t::type_t),
-  //     .input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
-  //   },
-  // };
-
   SDL_GPUColorTargetDescription color_target_desc = {
     .format = SDL_GetGPUSwapchainTextureFormat(context.device, context.window),
   };
