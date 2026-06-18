@@ -33,7 +33,7 @@ struct GContext
   static const u8* FRAGMENT_SHADER_DXIL;
   static const u64 FRAGMENT_SHADER_DXIL_SIZE;
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 3;
+  static constexpr i32 CellSide = 1;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -610,10 +610,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     });
 
 
+    u64 start = SDL_GetTicksNS();
     if (updating)
     {
       calculateNext(*context.current_cells, *context.next_cells);
     }
+    std::println("update elapsed: {} ms", (SDL_GetTicksNS() - start) * 1.e-6);
 
     th_draw.join();
 
