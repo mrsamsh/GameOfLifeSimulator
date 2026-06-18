@@ -33,7 +33,7 @@ struct GContext
   static const u8* FRAGMENT_SHADER_DXIL;
   static const u64 FRAGMENT_SHADER_DXIL_SIZE;
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 3;
+  static constexpr i32 CellSide = 1;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -51,14 +51,14 @@ struct GContext
   SDL_Window* window;
   SDL_GPUDevice* device;
   SDL_GPUGraphicsPipeline* pipeline;
-  SDL_GPUBuffer* cell_buffer,
-               * transform_buffer;
+  SDL_GPUBuffer* cell_buffer;
   SDL_GPUTransferBuffer* cell_transfer_buffer;
-  using array_t = Array<i32, gridWidth * gridHeight>;
+  using array_t = Array<i8, gridWidth * gridHeight>;
   array_t cells1;
   array_t cells2;
   array_t* current_cells = &cells1;
   array_t* next_cells = &cells2;
+  array_t pixels;
   void swap_cells() {
     array_t* temp = current_cells;
     current_cells = next_cells;
@@ -143,37 +143,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     .entrypoint = "FSmain",
     .format = format,
     .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+    .num_storage_buffers = 1,
   };
 
   SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(context.device, &fshader_info);
 
-  SDL_GPUVertexBufferDescription vb_desc[] = {
-    {
-      .slot = 0,
-      .pitch = sizeof(GContext::array_t::type_t),
-      .input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
-    },
-    {
-      .slot = 1,
-      .pitch = sizeof(math::vec2),
-      .input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
-    }
-  };
-
-  SDL_GPUVertexAttribute v_attrib[] = {
-    {
-      .location = 0,
-      .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_INT,
-      .offset = 0
-    },
-    {
-      .location = 1,
-      .buffer_slot = 1,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-      .offset = 0
-    }
-  };
+  // SDL_GPUVertexBufferDescription vb_desc[] = {
+  //   {
+  //     .slot = 0,
+  //     .pitch = sizeof(GContext::array_t::type_t),
+  //     .input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
+  //   },
+  // };
 
   SDL_GPUColorTargetDescription color_target_desc = {
     .format = SDL_GetGPUSwapchainTextureFormat(context.device, context.window),
@@ -183,10 +164,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     .vertex_shader = vertex_shader,
     .fragment_shader = fragment_shader,
     .vertex_input_state = {
-      .vertex_buffer_descriptions = vb_desc,
-      .num_vertex_buffers = ARRAY_COUNT(vb_desc),
-      .vertex_attributes = v_attrib,
-      .num_vertex_attributes = ARRAY_COUNT(v_attrib),
     },
     .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
     .target_info = {
@@ -208,54 +185,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     for (int x = 0; x < GContext::gridWidth; ++x)
       transformations[x + y * GContext::gridWidth] = {x, y};
 
-  SDL_GPUBufferCreateInfo transform_create_info{
-    .usage= SDL_GPU_BUFFERUSAGE_VERTEX,
-    .size = transformations.ByteCapacity()
-  };
-
-  context.transform_buffer = SDL_CreateGPUBuffer(
-      context.device, &transform_create_info);
-
-  SDL_GPUTransferBufferCreateInfo transform_transfer_buffer_info{
-    .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-    .size = transformations.ByteCapacity(),
-  };
-
-  SDL_GPUTransferBuffer* transform_transfer_buffer = SDL_CreateGPUTransferBuffer(
-      context.device,
-      & transform_transfer_buffer_info
-      );
-
-  math::vec2* trmap = (math::vec2*)SDL_MapGPUTransferBuffer(context.device, transform_transfer_buffer, false);
-  memcpy(trmap, transformations.data(), transformations.ByteCapacity());
-  SDL_UnmapGPUTransferBuffer(context.device, transform_transfer_buffer);
-
-  SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context.device);
-  SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
-
-  SDL_GPUTransferBufferLocation location{
-    .transfer_buffer = transform_transfer_buffer,
-    .offset = 0
-  };
-
-  SDL_GPUBufferRegion region{
-    .buffer = context.transform_buffer,
-    .offset = 0,
-    .size = transformations.ByteCapacity()
-  };
-
-  SDL_UploadToGPUBuffer(
-      copy_pass,
-      &location,
-      &region,
-      false
-      );
-
-  SDL_EndGPUCopyPass(copy_pass);
-  SDL_SubmitGPUCommandBuffer(command_buffer);
-
   SDL_GPUBufferCreateInfo buffer_create_info{
-    .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+    .usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
     .size = GContext::array_t::ByteCapacity(),
   };
 
@@ -305,172 +236,116 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
   GContext& context = *(GContext*)appstate;
-  auto calculateNext = [&](GContext::array_t const& current_cells, GContext::array_t& next_cells) {
-    const int gridWidth  = GContext::WindowWidth  / context.CellSide;
-    const int gridHeight = GContext::WindowHeight / context.CellSide;
-    std::fill(next_cells.begin(), next_cells.end(), 0);
+  auto calculateNext = [&context](const i8* const current_cells, i8* const next_cells) {
+    auto const gridWidth  = GContext::WindowWidth  / context.CellSide;
+    auto const gridHeight = GContext::WindowHeight / context.CellSide;
+    for (auto y = 1; y < gridHeight - 1; ++y)
     {
-      std::vector<std::jthread> thread_pool;
-      static constexpr u64 ThreadCount = 8,
-                           Chunk = GContext::gridHeight / ThreadCount;
-      for (int j = 0; j < ThreadCount; ++j)
+      for (auto x = 1; x < gridWidth - 1; ++x)
       {
-        thread_pool.emplace_back([j,&current_cells,&next_cells]{
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == GContext::gridHeight - 1) continue;
-            for (auto x = 0; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == 0) continue;
-            for (auto x = 0; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + 1] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            for (auto x = 1; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - 1] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == 0) continue;
-            for (auto x = 1; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - 1 - GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == GContext::gridHeight - 1) continue;
-            for (auto x = 1; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - 1 + GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == GContext::gridHeight - 1) continue;
-            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + 1 + GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == 0) continue;
-            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + 1 - GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-        });
+        auto cellIndex = x + y * gridWidth;
+                                // east west
+        next_cells[cellIndex] = current_cells[cellIndex + 1]
+                              + current_cells[cellIndex - 1]
+                                // north and south
+                              + current_cells[cellIndex + gridWidth]
+                              + current_cells[cellIndex - gridWidth]
+                                // ne and se
+                              + current_cells[cellIndex + gridWidth + 1]
+                              + current_cells[cellIndex - gridWidth + 1]
+                                // nw and sw
+                              + current_cells[cellIndex + gridWidth - 1]
+                              + current_cells[cellIndex - gridWidth - 1];
       }
     }
 
-    // edge cases?
-    for (auto x = 0; x < gridWidth; x++) {
-      auto targetIndex = gridWidth * (gridHeight - 1) + x;
-      auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-      next_cells[x] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto value = current_cells[x] == 1 ? 1 : 0;
-      auto targetIndex = gridWidth * (gridHeight - 1) + x;
-      next_cells[targetIndex] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((x + 1) % gridWidth);
-      auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-      next_cells[x] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto value = current_cells[x] == 1 ? 1 : 0;
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((x + 1) % gridWidth);
-      next_cells[targetIndex] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((gridWidth + x - 1) % gridWidth);
-      auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-      next_cells[x] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto value = current_cells[x] == 1 ? 1 : 0;
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((gridWidth + x - 1) % gridWidth);
-      next_cells[targetIndex] += value;
-    }
-
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * y;
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[targetIndex + gridWidth -1] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * y + gridWidth - 1;
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[gridWidth * y] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * ((y + 1) % gridHeight);
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[y * gridWidth] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * y + gridWidth - 1;
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[gridWidth * y] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * ((gridHeight + y - 1) % gridHeight);
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[targetIndex + gridWidth -1] += value;
-    // }
-
+    for (auto x = 0; x < gridWidth; ++x)
     {
-      static constexpr int ThreadCount = 8;
-      std::vector<std::jthread> thread_pool;
-      thread_pool.reserve(ThreadCount);
-      int chunk = context.next_cells->size() / ThreadCount;
+      auto nIndex = x, sIndex = x + (gridHeight - 1) * gridWidth, last_row = gridWidth * (gridHeight - 1);
+      auto x_pls_1_mod = (x + 1) % gridWidth;
+      auto x_min_1_mod = (x - 1 + gridWidth) % gridWidth;
 
-      for (int j = 0; j < ThreadCount; ++j)
-      {
-        thread_pool.emplace_back([chunk,j](GContext::array_t const& current_cells, GContext::array_t& next_cells){
-          for (usz i = j * chunk; i < (j + 1) * chunk; ++i) {
-            auto cc = current_cells[i];
-            i8 sc = next_cells[i];
-            if (cc == 1) {
-              switch (sc) {
-              case 2:
-              case 3:
-                next_cells[i] = 1;
-                break;
-              default:
-                next_cells[i] = -20;
-                break;
-              }
-            } else {
-              if (sc == 3) {
-                next_cells[i] = 1;
-              } else {
-                next_cells[i] = std::min(0, cc + 1);
-              }
-            }
-          }
-        }, std::ref(current_cells), std::ref(next_cells));
+      next_cells[nIndex] = current_cells[x_pls_1_mod]
+                         + current_cells[x_min_1_mod]
+
+                         + current_cells[x + gridWidth]
+                         + current_cells[sIndex]
+
+                         + current_cells[x_pls_1_mod + gridWidth]
+                         + current_cells[x_pls_1_mod + last_row]
+
+                         + current_cells[x_min_1_mod + gridWidth]
+                         + current_cells[x_min_1_mod + last_row];
+
+      next_cells[sIndex] = current_cells[x_pls_1_mod + last_row]
+                         + current_cells[x_min_1_mod + last_row]
+
+                         + current_cells[x]
+                         + current_cells[sIndex - gridWidth]
+
+                         + current_cells[x_pls_1_mod]
+                         + current_cells[x_min_1_mod]
+
+                         + current_cells[x_pls_1_mod + gridWidth * (gridHeight - 2)]
+                         + current_cells[x_min_1_mod + gridWidth * (gridHeight - 2)];
+    }
+
+    for (auto y = 1; y < (gridHeight - 1); ++y)
+    {
+      auto eIndex = y * gridWidth, wIndex = eIndex + gridWidth - 1;
+      // north and south
+      next_cells[eIndex] = current_cells[eIndex - gridWidth]
+                         + current_cells[eIndex + gridWidth]
+      // east and west
+                         + current_cells[eIndex + 1]
+                         + current_cells[wIndex]
+      // ne and se
+                         + current_cells[eIndex - gridWidth + 1]
+                         + current_cells[eIndex + gridWidth + 1]
+      // nw and sw
+                         + current_cells[wIndex - gridWidth]
+                         + current_cells[wIndex + gridWidth];
+
+      // north and south
+      next_cells[wIndex] = current_cells[wIndex - gridWidth]
+                         + current_cells[wIndex + gridWidth]
+
+      // east and west
+                         + current_cells[eIndex]
+                         + current_cells[wIndex - 1]
+      // nw and sw
+                         + current_cells[wIndex - gridWidth - 1]
+                         + current_cells[wIndex + gridWidth - 1]
+      // ne and se
+                         + current_cells[eIndex - gridWidth]
+                         + current_cells[eIndex + gridWidth];
+    }
+
+
+    i8* pixels = context.pixels.data();
+    for (usz i = 0; i < gridWidth * gridHeight; ++i) {
+      auto cc = current_cells[i];
+      i8 sc = next_cells[i];
+      next_cells[i] = 0;
+      i8& result = pixels[i];
+      if (cc == 1) {
+        switch (sc) {
+        case 2:
+        case 3:
+          next_cells[i] = 1;
+          result = 1;
+          break;
+        default:
+          result = -20;
+          break;
+        }
+      } else {
+        if (sc == 3) {
+          next_cells[i] = 1;
+          result = 1;
+        } else {
+          result = std::min(0, result + 1);
+        }
       }
     }
   };
@@ -498,7 +373,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   if ((step[1] && ! step[0]) || keyboard[SDL_SCANCODE_Q]) {
     updating = false;
-    calculateNext(*context.current_cells, *context.next_cells);
+    calculateNext(context.current_cells->data(), context.next_cells->data());
     context.swap_cells();
   }
 
@@ -535,89 +410,92 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     updateCamera(context);
   }
 
-  {
   // update here
 
   // draw here
   // first upload pass
-    std::thread th_draw([&context](){
-      SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context.device);
-      SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
-      void* map = SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
-      std::memcpy(map, context.current_cells->data(), context.current_cells->ByteCapacity());
-      SDL_UnmapGPUTransferBuffer(context.device, context.cell_transfer_buffer);
+  
+  void* map = SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
+  memcpy(map, context.pixels.data(), context.pixels.ByteCapacity());
+  SDL_UnmapGPUTransferBuffer(context.device, context.cell_transfer_buffer);
 
-      static SDL_GPUTransferBufferLocation location{
-        .transfer_buffer = context.cell_transfer_buffer,
-        .offset = 0
-      };
-      static SDL_GPUBufferRegion region{
-        .buffer = context.cell_buffer,
-        .offset = 0,
-        .size = GContext::array_t::ByteCapacity()
-      };
+  SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(context.device);
+  SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
 
-      SDL_UploadToGPUBuffer(
-          copy_pass,
-          &location,
-          &region,
-          false
-          );
+  static SDL_GPUTransferBufferLocation location{
+    .transfer_buffer = context.cell_transfer_buffer,
+    .offset = 0
+  };
 
-      SDL_EndGPUCopyPass(copy_pass);
+  static SDL_GPUBufferRegion region{
+    .buffer = context.cell_buffer,
+    .offset = 0,
+    .size = GContext::array_t::ByteCapacity()
+  };
 
-      SDL_GPUTexture* swapchain_texture;
-      u32 width, height;
-      SDL_WaitAndAcquireGPUSwapchainTexture(
-          command_buffer,
-          context.window,
-          &swapchain_texture,
-          &width,
-          &height
-          );
-      SDL_GPUColorTargetInfo color_target_info{
-        .texture = swapchain_texture,
-        .clear_color = {0.f, 0.025f, 0.2f, 1.f},
-        .load_op = SDL_GPU_LOADOP_CLEAR,
-        .store_op = SDL_GPU_STOREOP_STORE,
-      };
-      SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
-          command_buffer,
-          &color_target_info,
-          1,
-          nullptr
-          );
+  SDL_UploadToGPUBuffer(
+      copy_pass,
+      &location,
+      &region,
+      false
+      );
 
-      SDL_BindGPUGraphicsPipeline(render_pass, context.pipeline);
-      SDL_GPUBufferBinding buffer_bind[]{
-        {.buffer = context.cell_buffer},
-        {.buffer = context.transform_buffer}
-      };
-      SDL_BindGPUVertexBuffers(render_pass, 0, buffer_bind, 2);
+  SDL_EndGPUCopyPass(copy_pass);
 
-      SDL_SetGPUViewport(render_pass, &context.viewport);
+  SDL_GPUTexture* swapchain_texture;
+  u32 width, height;
+  SDL_WaitAndAcquireGPUSwapchainTexture(
+      command_buffer,
+      context.window,
+      &swapchain_texture,
+      &width,
+      &height
+      );
 
-      struct {
-        math::mat4 projection;
-        math::vec2 gridSize;
-        f32        cellSide;
-      } ubo = {context.matrices.projection * context.matrices.view, {GContext::gridWidth , GContext::gridHeight}, GContext::CellSide};
+  SDL_GPUColorTargetInfo color_target_info{
+    .texture = swapchain_texture,
+    .clear_color = {0.f, 0.025f, 0.2f, 1.f},
+    .load_op = SDL_GPU_LOADOP_CLEAR,
+    .store_op = SDL_GPU_STOREOP_STORE,
+  };
 
-      SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(ubo));
-      SDL_DrawGPUPrimitives(render_pass, 6, context.current_cells->size(), 0, 0);
-      SDL_EndGPURenderPass(render_pass);
-      SDL_SubmitGPUCommandBuffer(command_buffer);
-    });
+  SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
+      command_buffer,
+      &color_target_info,
+      1,
+      nullptr
+      );
+
+  SDL_BindGPUGraphicsPipeline(render_pass, context.pipeline);
+
+  SDL_GPUBufferBinding buffer_bind[]{
+    {.buffer = context.cell_buffer},
+  };
+
+  SDL_BindGPUFragmentStorageBuffers(render_pass, 0, &context.cell_buffer, 1);
+
+  SDL_SetGPUViewport(render_pass, &context.viewport);
+
+  struct {
+    math::mat4 projection;
+    math::vec2 windowSize;
+    math::vec2 gridSize;
+    f32        cellSide;
+  } ubo = {context.matrices.projection * context.matrices.view, {GContext::WindowWidth, GContext::WindowHeight}, {GContext::gridWidth , GContext::gridHeight}, GContext::CellSide};
+
+  SDL_PushGPUVertexUniformData(command_buffer, 0, &ubo, sizeof(ubo));
+  SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0);
+  SDL_EndGPURenderPass(render_pass);
+  SDL_SubmitGPUCommandBuffer(command_buffer);
 
 
-    if (updating)
-    {
-      calculateNext(*context.current_cells, *context.next_cells);
-    }
-
-    th_draw.join();
-
+  u64 start = SDL_GetTicksNS();
+  if (updating)
+  {
+    calculateNext(context.current_cells->data(), context.next_cells->data());
   }
+  std::println("update elapsed: {} ms", (SDL_GetTicksNS() - start) * 1.e-6);
+
 
   if (updating)
     context.swap_cells();
@@ -718,64 +596,34 @@ using namespace metal;
 struct UniformBufferObject
 {
   float4x4 projection;
+  float2   windowSize;
   float2   gridSize;
   float    cellSide;
-};
-
-struct VertexIn
-{
-  float2 translation[[attribute(1)]];
-  int color [[attribute(0)]];
 };
 
 struct VertexOut
 {
   float4 position [[position]];
-  float4 color;
+  float2 texcoord;
+  float2 gridSize;
 };
 
 constant float2 VertexPositions[6] = {
   {0.0, 0.0},
-  {0.8, 0.0},
-  {0.8, 0.8},
-  {0.0, 0.8},
+  {1.0, 0.0},
+  {1.0, 1.0},
+  {0.0, 1.0},
   {0.0, 0.0},
-  {0.8, 0.8}
-};
-constant float4 palette[] = {
-  {0.0, 0.100, 0.800, 1},
-  {0.0, 0.095, 0.760, 1},
-  {0.0, 0.090, 0.720, 1},
-  {0.0, 0.085, 0.680, 1},
-  {0.0, 0.080, 0.640, 1},
-  {0.0, 0.075, 0.600, 1},
-  {0.0, 0.070, 0.560, 1},
-  {0.0, 0.065, 0.520, 1},
-  {0.0, 0.060, 0.480, 1},
-  {0.0, 0.055, 0.440, 1},
-  {0.0, 0.050, 0.400, 1},
-  {0.0, 0.045, 0.360, 1},
-  {0.0, 0.040, 0.320, 1},
-  {0.0, 0.035, 0.280, 1},
-  {0.0, 0.030, 0.240, 1},
-  {0.0, 0.025, 0.200, 1},
-  {0.0, 0.020, 0.160, 1},
-  {0.0, 0.015, 0.120, 1},
-  {0.0, 0.010, 0.080, 1},
-  {0.0, 0.005, 0.040, 1},
-  {0, 0.0125, 0.1, 1},
-  {1, 1, 1, 1}
+  {1.0, 1.0}
 };
 
-vertex VertexOut VSmain(VertexIn in [[stage_in]],
-                        uint vertexID [[vertex_id]],
+vertex VertexOut VSmain(uint vertexID [[vertex_id]],
                         constant UniformBufferObject& ubo [[buffer(0)]])
 {
   VertexOut out;
-  out.color = palette[in.color + 20];
-
-  float2 position = (VertexPositions[vertexID] * ubo.cellSide + in.translation * ubo.cellSide);
-  out.position = ubo.projection * float4(position, 0, 1);
+  out.position = ubo.projection * float4(VertexPositions[vertexID] * ubo.windowSize, 0, 1);
+  out.texcoord = VertexPositions[vertexID] * ubo.gridSize;
+  out.gridSize = ubo.gridSize;
   return out;
 }
 )";
@@ -784,16 +632,47 @@ std::string_view GContext::FRAGMENT_SHADER_MSL = R"(
 #include <metal_stdlib>
 using namespace metal;
 
+constant float4 palette[] = {
+  {0.0, 0.100,  0.800, 1},
+  {0.0, 0.095,  0.760, 1},
+  {0.0, 0.090,  0.720, 1},
+  {0.0, 0.085,  0.680, 1},
+  {0.0, 0.080,  0.640, 1},
+  {0.0, 0.075,  0.600, 1},
+  {0.0, 0.070,  0.560, 1},
+  {0.0, 0.065,  0.520, 1},
+  {0.0, 0.060,  0.480, 1},
+  {0.0, 0.055,  0.440, 1},
+  {0.0, 0.050,  0.400, 1},
+  {0.0, 0.045,  0.360, 1},
+  {0.0, 0.040,  0.320, 1},
+  {0.0, 0.035,  0.280, 1},
+  {0.0, 0.030,  0.240, 1},
+  {0.0, 0.025,  0.200, 1},
+  {0.0, 0.020,  0.160, 1},
+  {0.0, 0.015,  0.120, 1},
+  {0.0, 0.010,  0.080, 1},
+  {0.0, 0.005,  0.040, 1},
+  {0.0, 0.025,  0.2,   1},
+  {1,   1,      1,     1}
+};
+
 struct VertexOut
 {
   float4 position [[position]];
-  float4 color;
+  float2 texcoord;
+  float2 gridSize;
 };
 
-
-fragment float4 FSmain(VertexOut in [[stage_in]])
+fragment float4 FSmain(VertexOut in [[stage_in]],
+                        constant int8_t* indices [[buffer0]])
 {
-  return in.color;
+  float2 local = fract(in.texcoord);
+  float margin = 0.1;
+  if (local.x < margin || local.x > 1.0 - margin || local.y < margin || local.y > 1.0 - margin)
+    return float4(0, 0.0125, 0.1, 1);
+  int i = floor(in.texcoord.x) + floor(in.texcoord.y) * in.gridSize.x;
+  return palette[indices[i] + 20];
 }
 )";
 
