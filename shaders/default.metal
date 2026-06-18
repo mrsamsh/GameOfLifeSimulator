@@ -55,7 +55,7 @@ vertex VertexOut vertexShader(uint vertexID [[vertex_id]],
                               )
 {
   VertexOut out;
-  out.position = ubo.projection * float4(VertexPositions[vertexID] * ubo.windowSize + float2(0.5, 0.5), 0, 1);
+  out.position = ubo.projection * float4(VertexPositions[vertexID] * ubo.windowSize, 0, 1);
   out.texcoord = VertexPositions[vertexID] * ubo.gridSize;
   out.gridSize = ubo.gridSize;
   return out;

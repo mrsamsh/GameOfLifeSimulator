@@ -39,7 +39,7 @@ struct UniformBufferObject
 struct GContext
 {
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 2;
+  static constexpr i32 CellSide = 1;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -402,7 +402,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   [context.command_buffer commit];
   [context.command_buffer waitUntilCompleted];
   [render_pass_desc release];
-  std::println("rendering elapsed: {:7.3f} ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
+  // std::println("rendering elapsed: {:7.3f} ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
 
 
   beginning = SDL_GetTicksNS();
@@ -411,7 +411,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     calculateNext(context.current_cells, context.next_cells);
     context.swap_cells();
   }
-  std::println("updating  elapsed: {:7.3f} ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
+  // std::println("updating  elapsed: {:7.3f} ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
 
   }
 
