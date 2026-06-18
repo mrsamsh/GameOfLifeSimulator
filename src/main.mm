@@ -31,6 +31,7 @@
 struct UniformBufferObject
 {
   math::mat4 projection;
+  math::vec2 windowSize;
   math::vec2 gridSize;
   f32 cellSide;
 };
@@ -38,7 +39,7 @@ struct UniformBufferObject
 struct GContext
 {
   static constexpr i32 WindowWidth = 1920 * 2, WindowHeight = 1080 * 2;
-  static constexpr i32 CellSide = 1;
+  static constexpr i32 CellSide = 4;
   static constexpr i32 gridWidth = WindowWidth / CellSide;
   static constexpr i32 gridHeight = WindowHeight / CellSide;
   static constexpr bool high_dpi = true;
@@ -60,9 +61,8 @@ struct GContext
   id<MTLLibrary> metal_default_library;
   id<MTLRenderPipelineState> pipeline;
   id<CAMetalDrawable> metal_drawable;
-  id<MTLBuffer> cells_buffer,
-                ubo,
-                translations;
+  id<MTLBuffer> pixels;
+  id<MTLBuffer> ubo;
   id<MTLCommandQueue> command_queue;
   id<MTLCommandBuffer> command_buffer;
   static constexpr usz cells_buffer_capacity = gridWidth * gridHeight;
@@ -111,7 +111,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   context.metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
   context.metal_window.contentView.layer = context.metal_layer;
   context.metal_window.contentView.wantsLayer = YES;
-  CGFloat scale = context.metal_window.screen.backingScaleFactor ?: 1.0;
+  CGFloat scale = context.high_dpi ? 2 : 1;
+  // CGFloat scale = context.metal_window.screen.backingScaleFactor ?: 1.0;
   context.metal_layer.contentsScale = scale;
   printf("%f\n", scale);
   NSView *view = context.metal_window.contentView;
@@ -120,17 +121,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
 
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
-  context.cells_buffer = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
-                                                       options:MTLResourceStorageModeShared];
+  context.pixels = [context.metal_device newBufferWithLength:sizeof(i8) * context.gridWidth * context.gridHeight options:MTLResourceStorageModeShared];
 
   reset_cells(context.current_cells);
-
-  Array<math::vec2, GContext::gridWidth * GContext::gridHeight> translations;
-  for (int y = 0; y < GContext::gridHeight; ++y)
-    for (int x = 0; x < GContext::gridWidth; ++x)
-      translations[x + y * GContext::gridWidth] = {x, y};
-
-  context.translations = [context.metal_device newBufferWithBytes:translations.data() length:translations.ByteCapacity() options:MTLResourceStorageModeShared];
 
   context.ubo = [context.metal_device newBufferWithLength:sizeof(UniformBufferObject)
                                                   options:MTLResourceStorageModeShared];
@@ -279,12 +272,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     }
 
 
-    i8* cells_buffer = (i8*)(context.cells_buffer.contents);
+    i8 *pixels = (i8*)context.pixels.contents;
     for (usz i = 0; i < gridWidth * gridHeight; ++i) {
       auto cc = current_cells[i];
       i8 sc = next_cells[i];
       next_cells[i] = 0;
-      i8& result = cells_buffer[i];
+      i8& result = pixels[i];
       if (cc == 1) {
         switch (sc) {
         case 2:
@@ -347,8 +340,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
     auto& clicked_cell = (context.current_cells)[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
-    auto& buffer_cell = ((i8*)context.cells_buffer.contents)[i];
-    buffer_cell = buffer_cell == 1 ? 0 : 1;
+    auto& pixel = ((i8*)(context.pixels.contents))[i];
+    pixel = pixel == 1 ? 0 : 1;
   }
 
   f32 zoomF = 0;
@@ -392,23 +385,24 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   [render_command_encoder setFrontFacingWinding:MTLWindingClockwise];
   UniformBufferObject* ubo = (UniformBufferObject*)context.ubo.contents;
   ubo->projection = context.matrices.projection * context.matrices.view;
+  ubo->windowSize = {context.WindowWidth, context.WindowHeight};
   ubo->gridSize = {GContext::gridWidth, GContext::gridHeight};
   ubo->cellSide = GContext::CellSide;
   [render_command_encoder setVertexBuffer:context.ubo offset:0 atIndex:0];
-  [render_command_encoder setVertexBuffer:context.cells_buffer offset:0 atIndex:1];
-  [render_command_encoder setVertexBuffer:context.translations offset:0 atIndex:2];
+  // TODO:update texture here
+  [render_command_encoder setFragmentBuffer:context.pixels offset:0 atIndex:0];
 
   [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle
                              vertexStart:0
                              vertexCount:6
-                           instanceCount:context.cells_buffer_capacity];
+                           instanceCount:1];
 
   [render_command_encoder endEncoding];
   [context.command_buffer presentDrawable:context.metal_drawable];
   [context.command_buffer commit];
   [context.command_buffer waitUntilCompleted];
   [render_pass_desc release];
-  NSLog(@"rendering elapsed: %f ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
+  std::println("rendering elapsed: {:7.3f} ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
 
 
   beginning = SDL_GetTicksNS();
@@ -417,7 +411,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     calculateNext(context.current_cells, context.next_cells);
     context.swap_cells();
   }
-  NSLog(@"updating elapsed: %f ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
+  std::println("updating  elapsed: {:7.3f} ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
 
   }
 
@@ -436,9 +430,6 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result)
   std::println("total frames    : {:3d} frame", context.frame_counter);
   std::println("avg ms per frame: {:7.3f} ms", ns_per_frame * 1.e-6);
   std::println("fps             : {:7.3f}", context.frame_counter / (elapsed * 1.e-9));
-  // SDL_ReleaseGPUBuffer(context.device, context.cell_buffer);
-  // SDL_ReleaseGPUTransferBuffer(context.device, context.cell_transfer_buffer);
-  // SDL_DestroyGPUDevice(context.device);
   SDL_DestroyWindow(context.window);
   SDL_Quit();
 }

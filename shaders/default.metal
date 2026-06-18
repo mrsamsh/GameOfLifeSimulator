@@ -4,6 +4,7 @@ using namespace metal;
 struct UniformBufferObject
 {
   float4x4 projection;
+  float2   windowSize;
   float2   gridSize;
   float    cellSide;
 };
@@ -11,16 +12,17 @@ struct UniformBufferObject
 struct VertexOut
 {
   float4 position  [[position]];
-  float4 color;
+  float2 texcoord;
+  float2 gridSize;
 };
 
 constant float2 VertexPositions[6] = {
   {0.0, 0.0},
-  {0.8, 0.0},
-  {0.8, 0.8},
-  {0.0, 0.8},
+  {1.0, 0.0},
+  {1.0, 1.0},
+  {0.0, 1.0},
   {0.0, 0.0},
-  {0.8, 0.8}
+  {1.0, 1.0}
 };
 
 constant float4 palette[] = {
@@ -44,25 +46,28 @@ constant float4 palette[] = {
   {0.0, 0.015,  0.120, 1},
   {0.0, 0.010,  0.080, 1},
   {0.0, 0.005,  0.040, 1},
-  {0.0, 0.0125, 0.1,   1},
+  {0.0, 0.025,  0.2,   1},
   {1,   1,      1,     1}
 };
 
 vertex VertexOut vertexShader(uint vertexID [[vertex_id]],
-                              uint instanceID [[instance_id]],
-                              constant UniformBufferObject& ubo [[buffer(0)]],
-                              constant int8_t* cells [[buffer(1)]],
-                              constant float2*  translations[[buffer(2)]]
+                              constant UniformBufferObject& ubo [[buffer(0)]]
                               )
 {
   VertexOut out;
-  out.color = palette[cells[instanceID] + 20];
-  float2 position = (VertexPositions[vertexID] * ubo.cellSide + translations[instanceID] * ubo.cellSide);
-  out.position = ubo.projection * float4(position, 0, 1);
+  out.position = ubo.projection * float4(VertexPositions[vertexID] * ubo.windowSize + float2(0.5, 0.5), 0, 1);
+  out.texcoord = VertexPositions[vertexID] * ubo.gridSize;
+  out.gridSize = ubo.gridSize;
   return out;
 }
 
-fragment float4 fragmentShader(VertexOut in [[stage_in]])
+fragment float4 fragmentShader(VertexOut in [[stage_in]],
+                               constant int8_t* indices [[buffer(0)]])
 {
-  return in.color;
+  float2 local = fract(in.texcoord);
+  float margin = 0.1;
+  if (local.x < margin || local.x > 1.0 - margin || local.y < margin || local.y > 1.0 - margin)
+    return float4(0, 0.0125, 0.1, 1);
+  int i = floor(in.texcoord.x) + floor(in.texcoord.y) * in.gridSize.x;
+  return palette[indices[i] + 20];
 }
