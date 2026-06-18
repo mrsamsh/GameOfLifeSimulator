@@ -60,10 +60,7 @@ struct GContext
   id<MTLLibrary> metal_default_library;
   id<MTLRenderPipelineState> pipeline;
   id<CAMetalDrawable> metal_drawable;
-  id<MTLBuffer> cells1[3],
-                cells2[3],
-                *current_buffer = &cells1[0],
-                *next_buffer = &cells2[0],
+  id<MTLBuffer> cells_buffer,
                 ubo,
                 translations;
   id<MTLCommandQueue> command_queue;
@@ -72,45 +69,13 @@ struct GContext
   i8 *current_cells,
      *next_cells;
   void swap_cells() {
-    buffer_state ++;
-    switch (buffer_state)
-    {
-      case 0:
-        current_buffer = &cells1[0];
-        next_buffer    = &cells2[0];
-        break;
-      case 1:
-        current_buffer = &cells2[0];
-        next_buffer    = &cells1[1];
-        break;
-      case 2:
-        current_buffer = &cells1[1];
-        next_buffer    = &cells2[1];
-        break;
-      case 3:
-        current_buffer = &cells2[1];
-        next_buffer    = &cells1[2];
-        break;
-      case 4:
-        current_buffer = &cells1[2];
-        next_buffer    = &cells2[2];
-        break;
-      case 5:
-        current_buffer = &cells2[2];
-        next_buffer    = &cells1[0];
-        buffer_state = -1;
-        break;
-      default:
-        assert(false && "Shouldnt reach here");
-        break;
-    }
-    current_cells = (i8*)(*current_buffer).contents;
-    next_cells    = (i8*)(*next_buffer).contents;
+    i8* temp = current_cells;
+    current_cells = next_cells;
+    next_cells = temp;
   }
   bool space_state[2] = {}, reset_state[2] = {}, step_state[2] = {};
   u64 start_time;
   u64 frame_counter = 0;
-  i8 buffer_state = 0;
   MTLViewport viewport;
 };
 
@@ -124,6 +89,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 {
   srand(std::time(nullptr));
   static GContext context;
+  context.current_cells = new i8[GContext::gridWidth * GContext::gridHeight];
+  context.next_cells = new i8[GContext::gridWidth * GContext::gridHeight];
   *appstate = &context;
 
   SDL_Init(SDL_INIT_VIDEO);
@@ -153,16 +120,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
 
   context.pixel_density = SDL_GetWindowPixelDensity(context.window);
-  for (int i = 0; i < 3; ++i)
-  {
-    context.cells1[i] = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
+  context.cells_buffer = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
                                                        options:MTLResourceStorageModeShared];
-    context.cells2[i] = [context.metal_device newBufferWithLength:sizeof(i8) * GContext::cells_buffer_capacity
-                                                       options:MTLResourceStorageModeShared];
-  }
-
-  context.current_cells = (i8*)context.cells1[0].contents;
-  context.next_cells = (i8*)context.cells2[0].contents;
 
   reset_cells(context.current_cells);
 
@@ -232,172 +191,118 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
   GContext& context = *(GContext*)appstate;
-  auto calculateNext = [&](i8* current_cells, i8* next_cells) {
-    const int gridWidth  = GContext::WindowWidth  / context.CellSide;
-    const int gridHeight = GContext::WindowHeight / context.CellSide;
-    memset(next_cells, 0, sizeof(i8) * GContext::cells_buffer_capacity);
+  auto calculateNext = [&context](const i8* const current_cells, i8* const next_cells) {
+    auto const gridWidth = GContext::gridWidth;
+    auto const gridHeight = GContext::gridHeight;
+    // memset(next_cells, 0, sizeof(*next_cells) * GContext::cells_buffer_capacity);
+
+    for (auto y = 1; y < gridHeight - 1; ++y)
     {
-      std::vector<std::jthread> thread_pool;
-      static constexpr u64 ThreadCount = 8,
-                           Chunk = GContext::gridHeight / ThreadCount;
-      for (int j = 0; j < ThreadCount; ++j)
+      for (auto x = 1; x < gridWidth - 1; ++x)
       {
-        thread_pool.emplace_back([j,current_cells,next_cells]{
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == GContext::gridHeight - 1) continue;
-            for (auto x = 0; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == 0) continue;
-            for (auto x = 0; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + 1] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            for (auto x = 1; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - 1] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == 0) continue;
-            for (auto x = 1; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - 1 - GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == GContext::gridHeight - 1) continue;
-            for (auto x = 1; x < GContext::gridWidth; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex - 1 + GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == GContext::gridHeight - 1) continue;
-            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + 1 + GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-          for (auto y = Chunk * j; y < Chunk * (j + 1); ++y) {
-            if (y == 0) continue;
-            for (auto x = 0; x < GContext::gridWidth - 1; ++x) {
-              auto cellIndex = x + y * GContext::gridWidth;
-              auto value = current_cells[cellIndex + 1 - GContext::gridWidth] == 1 ? 1 : 0;
-              next_cells[cellIndex] += value;
-            }
-          }
-        });
+        auto cellIndex = x + y * gridWidth;
+                                // east west
+        next_cells[cellIndex] = current_cells[cellIndex + 1]
+                              + current_cells[cellIndex - 1]
+                                // north and south
+                              + current_cells[cellIndex + gridWidth]
+                              + current_cells[cellIndex - gridWidth]
+                                // ne and se
+                              + current_cells[cellIndex + gridWidth + 1]
+                              + current_cells[cellIndex - gridWidth + 1]
+                                // nw and sw
+                              + current_cells[cellIndex + gridWidth - 1]
+                              + current_cells[cellIndex - gridWidth - 1];
       }
     }
 
-    // edge cases?
-    for (auto x = 0; x < gridWidth; x++) {
-      auto targetIndex = gridWidth * (gridHeight - 1) + x;
-      auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-      next_cells[x] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto value = current_cells[x] == 1 ? 1 : 0;
-      auto targetIndex = gridWidth * (gridHeight - 1) + x;
-      next_cells[targetIndex] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((x + 1) % gridWidth);
-      auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-      next_cells[x] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto value = current_cells[x] == 1 ? 1 : 0;
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((x + 1) % gridWidth);
-      next_cells[targetIndex] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((gridWidth + x - 1) % gridWidth);
-      auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-      next_cells[x] += value;
-    }
-    for (auto x = 0; x < gridWidth; x++) {
-      auto value = current_cells[x] == 1 ? 1 : 0;
-      auto targetIndex = gridWidth * (gridHeight - 1) + ((gridWidth + x - 1) % gridWidth);
-      next_cells[targetIndex] += value;
-    }
-
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * y;
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[targetIndex + gridWidth -1] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * y + gridWidth - 1;
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[gridWidth * y] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * ((y + 1) % gridHeight);
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[y * gridWidth] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * y + gridWidth - 1;
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[gridWidth * y] += value;
-    // }
-    // for (auto y = 0; y < gridHeight; ++y) {
-    //   auto targetIndex = gridWidth * ((gridHeight + y - 1) % gridHeight);
-    //   auto value = current_cells[targetIndex] == 1 ? 1 : 0;
-    //   next_cells[targetIndex + gridWidth -1] += value;
-    // }
-
+    for (auto x = 0; x < gridWidth; ++x)
     {
-      static constexpr int ThreadCount = 8;
-      std::vector<std::jthread> thread_pool;
-      thread_pool.reserve(ThreadCount);
-      int chunk = GContext::cells_buffer_capacity / ThreadCount;
+      auto nIndex = x, sIndex = x + (gridHeight - 1) * gridWidth, last_row = gridWidth * (gridHeight - 1);
+      auto x_pls_1_mod = (x + 1) % gridWidth;
+      auto x_min_1_mod = (x - 1 + gridWidth) % gridWidth;
 
-      for (int j = 0; j < ThreadCount; ++j)
-      {
-        thread_pool.emplace_back([chunk,j,current_cells,next_cells](){
-          for (usz i = j * chunk; i < (j + 1) * chunk; ++i) {
-            auto cc = current_cells[i];
-            i8 sc = next_cells[i];
-            if (cc == 1) {
-              switch (sc) {
-              case 2:
-              case 3:
-                next_cells[i] = 1;
-                break;
-              default:
-                next_cells[i] = -20;
-                break;
-              }
-            } else {
-              if (sc == 3) {
-                next_cells[i] = 1;
-              } else {
-                next_cells[i] = std::min(0, cc + 1);
-              }
-            }
-          }
-        });
+      next_cells[nIndex] = current_cells[x_pls_1_mod]
+                         + current_cells[x_min_1_mod]
+
+                         + current_cells[x + gridWidth]
+                         + current_cells[sIndex]
+
+                         + current_cells[x_pls_1_mod + gridWidth]
+                         + current_cells[x_pls_1_mod + last_row]
+
+                         + current_cells[x_min_1_mod + gridWidth]
+                         + current_cells[x_min_1_mod + last_row];
+
+      next_cells[sIndex] = current_cells[x_pls_1_mod + last_row]
+                         + current_cells[x_min_1_mod + last_row]
+
+                         + current_cells[x]
+                         + current_cells[sIndex - gridWidth]
+
+                         + current_cells[x_pls_1_mod]
+                         + current_cells[x_min_1_mod]
+
+                         + current_cells[x_pls_1_mod + gridWidth * (gridHeight - 2)]
+                         + current_cells[x_min_1_mod + gridWidth * (gridHeight - 2)];
+    }
+
+    for (auto y = 1; y < (gridHeight - 1); ++y)
+    {
+      auto eIndex = y * gridWidth, wIndex = eIndex + gridWidth - 1;
+      // north and south
+      next_cells[eIndex] = current_cells[eIndex - gridWidth]
+                         + current_cells[eIndex + gridWidth]
+      // east and west
+                         + current_cells[eIndex + 1]
+                         + current_cells[wIndex]
+      // ne and se
+                         + current_cells[eIndex - gridWidth + 1]
+                         + current_cells[eIndex + gridWidth + 1]
+      // nw and sw
+                         + current_cells[wIndex - gridWidth]
+                         + current_cells[wIndex + gridWidth];
+
+      // north and south
+      next_cells[wIndex] = current_cells[wIndex - gridWidth]
+                         + current_cells[wIndex + gridWidth]
+
+      // east and west
+                         + current_cells[eIndex]
+                         + current_cells[wIndex - 1]
+      // nw and sw
+                         + current_cells[wIndex - gridWidth - 1]
+                         + current_cells[wIndex + gridWidth - 1]
+      // ne and se
+                         + current_cells[eIndex - gridWidth]
+                         + current_cells[eIndex + gridWidth];
+    }
+
+
+    i8* cells_buffer = (i8*)(context.cells_buffer.contents);
+    for (usz i = 0; i < gridWidth * gridHeight; ++i) {
+      auto cc = current_cells[i];
+      i8 sc = next_cells[i];
+      next_cells[i] = 0;
+      i8& result = cells_buffer[i];
+      if (cc == 1) {
+        switch (sc) {
+        case 2:
+        case 3:
+          next_cells[i] = 1;
+          result = 1;
+          break;
+        default:
+          result = -20;
+          break;
+        }
+      } else {
+        if (sc == 3) {
+          next_cells[i] = 1;
+          result = 1;
+        } else {
+          result = std::min(0, result + 1);
+        }
       }
     }
   };
@@ -442,6 +347,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
     auto& clicked_cell = (context.current_cells)[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
+    auto& buffer_cell = ((i8*)context.cells_buffer.contents)[i];
+    buffer_cell = buffer_cell == 1 ? 0 : 1;
   }
 
   f32 zoomF = 0;
@@ -486,7 +393,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   ubo->gridSize = {GContext::gridWidth, GContext::gridHeight};
   ubo->cellSide = GContext::CellSide;
   [render_command_encoder setVertexBuffer:context.ubo offset:0 atIndex:0];
-  [render_command_encoder setVertexBuffer:*context.current_buffer offset:0 atIndex:1];
+  [render_command_encoder setVertexBuffer:context.cells_buffer offset:0 atIndex:1];
   [render_command_encoder setVertexBuffer:context.translations offset:0 atIndex:2];
 
   [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle
@@ -497,23 +404,21 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   [render_command_encoder endEncoding];
   [context.command_buffer presentDrawable:context.metal_drawable];
   [context.command_buffer commit];
-  // [context.command_buffer waitUntilScheduled];
+  [context.command_buffer waitUntilScheduled];
   [render_pass_desc release];
-  NSLog(@"rendering elapsed: %f ms, %d", (SDL_GetTicksNS() - beginning) * 1.e-6, context.buffer_state);
+  NSLog(@"rendering elapsed: %f ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
 
 
   beginning = SDL_GetTicksNS();
   if (updating)
   {
     calculateNext(context.current_cells, context.next_cells);
-  }
-  NSLog(@"updating elapsed: %f ms, %d", (SDL_GetTicksNS() - beginning) * 1.e-6, context.buffer_state);
-
-  }
-
-  if (updating)
     context.swap_cells();
-  // if (elapsed < Delta)
+  }
+  NSLog(@"updating elapsed: %f ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
+
+  }
+
   //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
 
   context.frame_counter++;
