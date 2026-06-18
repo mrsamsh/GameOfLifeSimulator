@@ -155,8 +155,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
     .vertex_shader = vertex_shader,
     .fragment_shader = fragment_shader,
-    .vertex_input_state = {
-    },
+    .vertex_input_state = { },
     .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
     .target_info = {
       .color_target_descriptions = &color_target_desc,
@@ -228,7 +227,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
   GContext& context = *(GContext*)appstate;
-  auto calculateNext = [&context](const i8* const current_cells, i8* const next_cells) {
+  auto calculateNext = [&context](const GContext::array_t::type_t* const current_cells, GContext::array_t::type_t* const next_cells) {
     auto const gridWidth  = GContext::WindowWidth  / context.CellSide;
     auto const gridHeight = GContext::WindowHeight / context.CellSide;
     for (auto y = 1; y < gridHeight - 1; ++y)
@@ -314,12 +313,12 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     }
 
 
-    i8* pixels = context.pixels.data();
+    GContext::array_t::type_t* pixels = context.pixels.data();
     for (usz i = 0; i < gridWidth * gridHeight; ++i) {
       auto cc = current_cells[i];
-      i8 sc = next_cells[i];
+      GContext::array_t::type_t sc = next_cells[i];
       next_cells[i] = 0;
-      i8& result = pixels[i];
+      GContext::array_t::type_t& result = pixels[i];
       if (cc == 1) {
         switch (sc) {
         case 2:
@@ -381,7 +380,9 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     u32 yy = floor(mousepos.y) / GContext::CellSide;
     u32 i = xx + yy * (GContext::WindowWidth / GContext::CellSide);
     auto& clicked_cell = (*context.current_cells)[i];
+    auto& pixel = context.pixels[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
+    pixel = pixel == 1 ? 0 : 1;
   }
 
   f32 zoomF = 0;

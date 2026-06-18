@@ -6,7 +6,7 @@ struct UniformBufferObject
   float    cellSide;
 };
 
-cbuffer UBO : register(b0, space0)
+cbuffer UBO : register(b0, space1)
 {
   UniformBufferObject ubo;
 };

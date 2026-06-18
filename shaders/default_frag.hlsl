@@ -23,7 +23,7 @@ static const float4 palette[22] = {
   float4(1,   1,      1,     1)
 };
 
-ByteAddressBuffer indices : register(t0, space1);
+ByteAddressBuffer indices : register(t0, space2);
 
 struct Input
 {
@@ -39,6 +39,8 @@ float4 FSmain(Input input) : SV_Target0
   if (local.x < margin || local.x > 1.0 - margin || local.y < margin || local.y > 1.0 - margin)
     return float4(0, 0.0125, 0.1, 1);
   int i = floor(input.texcoord.x) + floor(input.texcoord.y) * input.gridSize.x;
-  int current_value = indices.Load<int>(i);
+  uint alignedoffset = (i / 4) * 4;
+  uint byteindex = (i % 4) * 8;
+  int current_value = (indices.Load<int>(alignedoffset) >> byteindex) & 0xff;
   return palette[current_value + 20];
 }
