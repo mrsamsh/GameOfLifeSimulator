@@ -388,6 +388,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   id<MTLRenderCommandEncoder> render_command_encoder = 
     [context.command_buffer renderCommandEncoderWithDescriptor:render_pass_desc];
   [render_command_encoder setRenderPipelineState:context.pipeline];
+  [render_command_encoder setCullMode:MTLCullModeBack];
+  [render_command_encoder setFrontFacingWinding:MTLWindingClockwise];
   UniformBufferObject* ubo = (UniformBufferObject*)context.ubo.contents;
   ubo->projection = context.matrices.projection * context.matrices.view;
   ubo->gridSize = {GContext::gridWidth, GContext::gridHeight};
@@ -404,7 +406,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   [render_command_encoder endEncoding];
   [context.command_buffer presentDrawable:context.metal_drawable];
   [context.command_buffer commit];
-  [context.command_buffer waitUntilScheduled];
+  [context.command_buffer waitUntilCompleted];
   [render_pass_desc release];
   NSLog(@"rendering elapsed: %f ms", (SDL_GetTicksNS() - beginning) * 1.e-6);
 
