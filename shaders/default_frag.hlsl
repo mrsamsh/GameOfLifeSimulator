@@ -42,5 +42,5 @@ float4 FSmain(Input input) : SV_Target0
   uint alignedoffset = (i / 4) * 4;
   uint byteindex = (i % 4) * 8;
   int current_value = (indices.Load<int>(alignedoffset) >> byteindex) & 0xff;
-  return palette[current_value + 20];
+  return palette[current_value];
 }

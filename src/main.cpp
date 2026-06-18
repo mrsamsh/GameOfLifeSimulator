@@ -324,18 +324,18 @@ SDL_AppResult SDL_AppIterate(void* appstate)
         case 2:
         case 3:
           next_cells[i] = 1;
-          result = 1;
+          result = 21;
           break;
         default:
-          result = -20;
+          result = 0;
           break;
         }
       } else {
         if (sc == 3) {
           next_cells[i] = 1;
-          result = 1;
+          result = 21;
         } else {
-          result = std::min(0, result + 1);
+          result = std::min(20, result + 1);
         }
       }
     }
@@ -382,7 +382,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     auto& clicked_cell = (*context.current_cells)[i];
     auto& pixel = context.pixels[i];
     clicked_cell = clicked_cell == 1 ? 0 : 1;
-    pixel = pixel == 1 ? 0 : 1;
+    pixel = pixel == 21 ? 20 : 21;
   }
 
   f32 zoomF = 0;
@@ -665,7 +665,7 @@ fragment float4 FSmain(VertexOut in [[stage_in]],
   if (local.x < margin || local.x > 1.0 - margin || local.y < margin || local.y > 1.0 - margin)
     return float4(0, 0.0125, 0.1, 1);
   int i = floor(in.texcoord.x) + floor(in.texcoord.y) * in.gridSize.x;
-  return palette[indices[i] + 20];
+  return palette[indices[i]];
 }
 )";
 
