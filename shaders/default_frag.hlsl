@@ -23,7 +23,7 @@ static const float4 palette[22] = {
   float4(1,   1,      1,     1)
 };
 
-ByteAddressBuffer indices : register(t0, space0);
+ByteAddressBuffer indices : register(t0, space1);
 
 struct Input
 {
