@@ -22,6 +22,12 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
+#ifdef DEBUG
+# define GRAPHICS_WITH_DEBUG true
+#else
+# define GRAPHICS_WITH_DEBUG false
+#endif
+
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof(*(array)))
 
 struct GContext
@@ -87,7 +93,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
   SDL_Init(SDL_INIT_VIDEO);
   bool const* keyboard = SDL_GetKeyboardState(nullptr);
-  context.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_DXIL, true, 0);
+  context.device = SDL_CreateGPUDevice(
+      SDL_GPU_SHADERFORMAT_MSL
+      | SDL_GPU_SHADERFORMAT_DXIL
+      | SDL_GPU_SHADERFORMAT_SPIRV
+      , GRAPHICS_WITH_DEBUG, 0);
   context.window = SDL_CreateWindow(
       "Test",
       GContext::WindowWidth, GContext::WindowHeight,
@@ -120,6 +130,14 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     fragment_shader_source = (const u8*)context.FRAGMENT_SHADER_DXIL;
     fragment_shader_source_size = context.FRAGMENT_SHADER_DXIL_SIZE;
     format = SDL_GPU_SHADERFORMAT_DXIL;
+  }
+  else if (format & SDL_GPU_SHADERFORMAT_SPIRV)
+  {
+    vertex_shader_source = (const u8*)context.VERTEX_SHADER_DXIL;
+    vertex_shader_source_size = context.VERTEX_SHADER_DXIL_SIZE;
+    fragment_shader_source = (const u8*)context.FRAGMENT_SHADER_DXIL;
+    fragment_shader_source_size = context.FRAGMENT_SHADER_DXIL_SIZE;
+    format = SDL_GPU_SHADERFORMAT_SPIRV;
   }
   else
   {
@@ -670,10 +688,10 @@ fragment float4 FSmain(VertexOut in [[stage_in]],
 )";
 
 #include "../shaders/default_vert.hpp"
-const u8* GContext::VERTEX_SHADER_DXIL = default_vert_dxil;
-const u64 GContext::VERTEX_SHADER_DXIL_SIZE = default_vert_dxil_len;
+const u8* GContext::VERTEX_SHADER_DXIL = default_vert;
+const u64 GContext::VERTEX_SHADER_DXIL_SIZE = default_vert_len;
 
 #include "../shaders/default_frag.hpp"
-const u8* GContext::FRAGMENT_SHADER_DXIL = default_frag_dxil;
-const u64 GContext::FRAGMENT_SHADER_DXIL_SIZE = default_frag_dxil_len;
+const u8* GContext::FRAGMENT_SHADER_DXIL = default_frag;
+const u64 GContext::FRAGMENT_SHADER_DXIL_SIZE = default_frag_len;
 

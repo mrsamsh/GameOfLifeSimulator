@@ -21,13 +21,13 @@ class Time;
 namespace literals
 {
 
-  constexpr math::Time operator""_sec(u64 const);
+  constexpr math::Time operator""_sec(unsigned long long const);
   constexpr math::Time operator""_sec(f128 const);
-  constexpr math::Time operator""_mlsec(u64 const);
+  constexpr math::Time operator""_mlsec(unsigned long long const);
   constexpr math::Time operator""_mlsec(f128 const);
-  constexpr math::Time operator""_mcsec(u64 const);
+  constexpr math::Time operator""_mcsec(unsigned long long const);
   constexpr math::Time operator""_mcsec(f128 const);
-  constexpr math::Time operator""_nsec(u64 const);
+  constexpr math::Time operator""_nsec(unsigned long long const);
   constexpr math::Time operator""_nsec(f128 const);
 
 } // namespace literals
@@ -126,13 +126,13 @@ private:
   friend inline constexpr Time microseconds(u64 const mcs);
   friend inline constexpr Time nanoseconds(u64 const ns);
 
-  friend constexpr Time literals::operator""_sec(u64 const);
+  friend constexpr Time literals::operator""_sec(unsigned long long const);
   friend constexpr Time literals::operator""_sec(f128 const);
-  friend constexpr Time literals::operator""_mlsec(u64 const);
+  friend constexpr Time literals::operator""_mlsec(unsigned long long const);
   friend constexpr Time literals::operator""_mlsec(f128 const);
-  friend constexpr Time literals::operator""_mcsec(u64 const);
+  friend constexpr Time literals::operator""_mcsec(unsigned long long const);
   friend constexpr Time literals::operator""_mcsec(f128 const);
-  friend constexpr Time literals::operator""_nsec(u64 const);
+  friend constexpr Time literals::operator""_nsec(unsigned long long const);
   friend constexpr Time literals::operator""_nsec(f128 const);
 };
 
@@ -159,7 +159,7 @@ inline constexpr Time nanoseconds(u64 const ns)
 namespace literals
 {
 
-  constexpr math::Time operator""_sec(u64 const s)
+  constexpr math::Time operator""_sec(unsigned long long const s)
   {
     return math::seconds(s);
   }
@@ -167,7 +167,7 @@ namespace literals
   {
     return math::seconds(s);
   }
-  constexpr math::Time operator""_mlsec(u64 const ms)
+  constexpr math::Time operator""_mlsec(unsigned long long const ms)
   {
     return math::milliseconds(ms);
   }
@@ -175,7 +175,7 @@ namespace literals
   {
     return math::milliseconds(ms);
   }
-  constexpr math::Time operator""_mcsec(u64 const mcs)
+  constexpr math::Time operator""_mcsec(unsigned long long const mcs)
   {
     return math::microseconds(mcs);
   }
@@ -183,7 +183,7 @@ namespace literals
   {
     return math::microseconds(mcs);
   }
-  constexpr math::Time operator""_nsec(u64 const ns)
+  constexpr math::Time operator""_nsec(unsigned long long const ns)
   {
     return Time(ns);
   }

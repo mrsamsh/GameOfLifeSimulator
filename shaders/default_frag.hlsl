@@ -1,3 +1,9 @@
+#if defined(USING_GLSLC)
+  #define VULKAN_TARGET 1
+#else
+  #define DX12_TARGET 1
+#endif
+
 static const float4 palette[22] = {
   float4(0.0, 0.100,  0.800, 1),
   float4(0.0, 0.095,  0.760, 1),
@@ -23,7 +29,11 @@ static const float4 palette[22] = {
   float4(1,   1,      1,     1)
 };
 
-ByteAddressBuffer indices : register(t0, space2);
+#ifdef DX12_TARGET
+  ByteAddressBuffer indices : register(t0, space2);
+#else
+  StructuredBuffer<int> indices : register(t0, space2);
+#endif
 
 struct Input
 {
@@ -39,8 +49,14 @@ float4 FSmain(Input input) : SV_Target0
   if (local.x < margin || local.x > 1.0 - margin || local.y < margin || local.y > 1.0 - margin)
     return float4(0, 0.0125, 0.1, 1);
   int i = floor(input.texcoord.x) + floor(input.texcoord.y) * input.gridSize.x;
+#ifdef DX12_TARGET
   uint alignedoffset = (i / 4) * 4;
   uint byteindex = (i % 4) * 8;
   int current_value = (indices.Load<int>(alignedoffset) >> byteindex) & 0xff;
+#else
+  uint alignedoffset = (i / 4);
+  uint byteindex = (i % 4) * 8;
+  int current_value = (indices[alignedoffset] >> byteindex) & 0xff;
+#endif
   return palette[current_value];
 }

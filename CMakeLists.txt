@@ -14,9 +14,40 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 
 set(TargetApp GameOfLife)
 
+if (WIN32)
+  set(GENERATED_HEADERS
+    ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
+    ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
+  )
+  add_custom_command(
+    OUTPUT ${GENERATED_HEADERS}
+    COMMAND cmd /c "${CMAKE_SOURCE_DIR}/shaders/compile_shaders.bat"
+    DEPENDS
+      ${CMAKE_SOURCE_DIR}/shaders/default_vert.hlsl
+      ${CMAKE_SOURCE_DIR}/shaders/default_frag.hlsl
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
+    COMMENT "Compiling DX shaders"
+  )
+elseif (LINUX)
+  set(GENERATED_HEADERS
+    ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
+    ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
+  )
+  add_custom_command(
+    OUTPUT ${GENERATED_HEADERS}
+    COMMAND bash "${CMAKE_SOURCE_DIR}/shaders/compile_shaders.sh"
+    DEPENDS
+      ${CMAKE_SOURCE_DIR}/shaders/default_vert.hlsl
+      ${CMAKE_SOURCE_DIR}/shaders/default_frag.hlsl
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
+    COMMENT "Compiling SPIR-V shaders"
+  )
+endif()
+
 # files to compile for executable
 add_executable(${TargetApp}
   src/main.cpp
+  ${GENERATED_HEADERS}
 )
 
 set(TargetSpecificLibs "")
@@ -63,15 +94,6 @@ PROPERTIES
   MACOSX_BUNDLE_ICON_FILE       "icon.icns"
   MACOSX_BUNDLE   "TRUE"
 )
-endif()
-
-if (WIN32)
-  add_custom_target(CompileDXShaders ALL
-    COMMENT "Compiling DX12 shaders"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
-    COMMAND cmd /c "${CMAKE_SOURCE_DIR}/shaders/compile_shaders.bat"
-  )
-  add_dependencies(${TargetName} CompileDXShaders)
 endif()
 
 

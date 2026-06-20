@@ -24,7 +24,7 @@ for %%f in (*.hlsl) do (
 
   echo Compiling %%f as !target!...
   dxc.exe -T !target! -Fo "!filename!.dxil" -E !entry! "%%f"
-  xxd -i "!filename!.dxil" "!filename!.hpp"
+  xxd -n "!filename!" -i "!filename!.dxil" "!filename!.hpp"
 
   if %errorlevel% neq 0 (
     echo [ERROR] Failed to compile %%f
