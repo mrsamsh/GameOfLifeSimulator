@@ -14,33 +14,40 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 
 set(TargetApp GameOfLife)
 
-if (WIN32)
-  set(GENERATED_HEADERS
-    ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
-    ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
-  )
+set(GENERATED_HEADERS
+  ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
+  ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
+)
+
+if(WIN32)
   add_custom_command(
     OUTPUT ${GENERATED_HEADERS}
-    COMMAND cmd /c "${CMAKE_SOURCE_DIR}/shaders/compile_shaders.bat"
+    COMMAND cmd /c "${CMAKE_SOURCE_DIR}/shaders/compile_dx_shaders.bat"
     DEPENDS
       ${CMAKE_SOURCE_DIR}/shaders/default_vert.hlsl
       ${CMAKE_SOURCE_DIR}/shaders/default_frag.hlsl
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
     COMMENT "Compiling DX shaders"
   )
-elseif (LINUX)
-  set(GENERATED_HEADERS
-    ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
-    ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
-  )
+elseif(LINUX)
   add_custom_command(
     OUTPUT ${GENERATED_HEADERS}
-    COMMAND bash "${CMAKE_SOURCE_DIR}/shaders/compile_shaders.sh"
+    COMMAND bash "${CMAKE_SOURCE_DIR}/shaders/compile_spv_shaders.sh"
     DEPENDS
       ${CMAKE_SOURCE_DIR}/shaders/default_vert.hlsl
       ${CMAKE_SOURCE_DIR}/shaders/default_frag.hlsl
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
     COMMENT "Compiling SPIR-V shaders"
+  )
+elseif(APPLE)
+  add_custom_command(
+    OUTPUT ${GENERATED_HEADERS}
+    COMMAND bash "${CMAKE_SOURCE_DIR}/shaders/compile_metal_shaders.sh"
+    DEPENDS
+      ${CMAKE_SOURCE_DIR}/shaders/default_vert.metal
+      ${CMAKE_SOURCE_DIR}/shaders/default_frag.metal
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
+    COMMENT "Compiling Metal shaders"
   )
 endif()
 
@@ -50,7 +57,7 @@ add_executable(${TargetApp}
   ${GENERATED_HEADERS}
 )
 
-set(TargetSpecificLibs "")
+# set(TargetSpecificLibs "")
 
 if(WIN32)
   set(TargetSpecificLibs stdc++exp)
@@ -96,5 +103,8 @@ PROPERTIES
 )
 endif()
 
+target_compile_definitions(${TargetApp}
+  PUBLIC $<$<CONFIG:Debug>:ASSERTION_ENABLED;DEBUG>
+)
 
-add_dependencies(${TargetName} CopyCompileCommands)
+add_dependencies(${TargetApp} CopyCompileCommands)
