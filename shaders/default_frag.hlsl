@@ -49,13 +49,13 @@ float4 FSmain(Input input) : SV_Target0
   if (local.x < margin || local.x > 1.0 - margin || local.y < margin || local.y > 1.0 - margin)
     return float4(0, 0.0125, 0.1, 1);
   int i = floor(input.texcoord.x) + floor(input.texcoord.y) * input.gridSize.x;
-#ifdef DX12_TARGET
-  uint alignedoffset = (i / 4) * 4;
   uint byteindex = (i % 4) * 8;
+#ifdef DX12_TARGET
+  // I need this [* 4] here because Load loads from byte address, not from array index
+  uint alignedoffset = (i / 4) * 4;
   int current_value = (indices.Load<int>(alignedoffset) >> byteindex) & 0xff;
 #else
   uint alignedoffset = (i / 4);
-  uint byteindex = (i % 4) * 8;
   int current_value = (indices[alignedoffset] >> byteindex) & 0xff;
 #endif
   return palette[current_value];
