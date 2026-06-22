@@ -21,6 +21,7 @@ function(add_metal_shader_library libID libName)
     add_custom_command(
       OUTPUT ${targetShader}
       DEPENDS ${CMAKE_SOURCE_DIR}/${file}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
       COMMAND xcrun -sdk macosx metal -c ${CMAKE_SOURCE_DIR}/${file} -o ${airFilename}
       COMMAND xcrun -sdk macosx metal -o ${targetShader} ${airFilename}
       COMMAND ${CMAKE_COMMAND} -E rm ${airFilename}

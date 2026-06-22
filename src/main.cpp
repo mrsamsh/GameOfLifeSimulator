@@ -51,15 +51,10 @@ struct GContext
     math::vec2 offset = math::vec2(WindowWidth, WindowHeight) / 2.f;
   } camera;
   SDL_Window* window;
-<<<<<<< HEAD
-  ShaderProgram program;
-  u32 VAO, VBO, VBO_Transform;
-=======
   SDL_GPUDevice* device;
   SDL_GPUGraphicsPipeline* pipeline;
   SDL_GPUBuffer* cell_buffer;
   SDL_GPUTransferBuffer* cell_transfer_buffer;
->>>>>>> sdl_gpu
   using array_t = Array<i8, gridWidth * gridHeight>;
   array_t cells1;
   array_t cells2;
@@ -120,12 +115,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   fragment_shader_source = (const u8* const)context.FRAGMENT_SHADER;
   fragment_shader_source_size = context.FRAGMENT_SHADER_SIZE;
 
-<<<<<<< HEAD
-  glGenVertexArrays(1, &context->VAO);
-  glBindVertexArray(context->VAO);
-
-  glGenBuffers(1, &context->VBO_Transform);
-=======
   if (format & SDL_GPU_SHADERFORMAT_METALLIB)
   {
     format = SDL_GPU_SHADERFORMAT_METALLIB;
@@ -188,25 +177,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   context.matrices.projection = math::mat4::ortho(0, GContext::WindowWidth, 0, GContext::WindowHeight, -10, 10);
   context.matrices.view = math::mat4::Identity();
 
->>>>>>> sdl_gpu
   Array<math::vec2, GContext::gridWidth * GContext::gridHeight> transformations;
   for (int y = 0; y < GContext::gridHeight; ++y)
     for (int x = 0; x < GContext::gridWidth; ++x)
       transformations[x + y * GContext::gridWidth] = {x, y};
-<<<<<<< HEAD
-  glBindBuffer(GL_ARRAY_BUFFER, context->VBO_Transform);
-  glBufferData(GL_ARRAY_BUFFER, transformations.ByteCapacity(), transformations.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(math::vec2), 0);
-  glVertexAttribDivisor(1, 1);
-
-  glGenBuffers(1, &context->VBO);
-  glBindBuffer(GL_ARRAY_BUFFER, context->VBO);
-  glBufferData(GL_ARRAY_BUFFER, context->current_cells->ByteCapacity(), nullptr, GL_DYNAMIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 1, GL_BYTE, false, sizeof(i8), 0);
-  glVertexAttribDivisor(0, 1);
-=======
 
   SDL_GPUBufferCreateInfo buffer_create_info{
     .usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
@@ -226,7 +200,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   context.cell_transfer_buffer = SDL_CreateGPUTransferBuffer(
       context.device, &transfer_buffer_create_info
       );
->>>>>>> sdl_gpu
 
   handleResize(context);
   SDL_SyncWindow( context.window);
@@ -520,34 +493,13 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   {
     calculateNext(context.current_cells->data(), context.next_cells->data());
   }
-<<<<<<< HEAD
-  // -----------------------------------
-  u64 start = SDL_GetTicksNS();
-  glClear(GL_COLOR_BUFFER_BIT);
-=======
   std::println("update elapsed: {} ms", (SDL_GetTicksNS() - start) * 1.e-6);
->>>>>>> sdl_gpu
 
 
-<<<<<<< HEAD
-  SDL_GL_SwapWindow(context->window);
-
-  u64 end = SDL_GetTicksNS() - start;
-  // std::println("elapsed: {:7.3f}", end * 1.e-6);
-
-  if (updating)
-    context->swap_cells();
-  auto elapsed = math::Clock::Now() - begin;
-  std::println("elapsed: {:7.3f} ms", end * 1.e-6);
-  // if (elapsed < Delta)
-  //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
-  begin = math::Clock::Now();
-=======
   if (updating)
     context.swap_cells();
   // if (elapsed < Delta)
   //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
->>>>>>> sdl_gpu
 
   context.frame_counter++;
   return SDL_APP_CONTINUE;
@@ -641,72 +593,7 @@ void toggleFullScreen(GContext& context)
 const u8* GContext::VERTEX_SHADER = Shader_vert;
 const u64 GContext::VERTEX_SHADER_SIZE = Shader_vert_len;
 
-<<<<<<< HEAD
-layout (location = 0) in float aColor;
-layout (location = 1) in vec2  aTranslation;
-
-uniform mat4 projection;
-uniform vec2 gridSize;
-uniform float cellSide;
-
-out vec4 OutColor;
-
-const vec2 VertexPositions[4] = vec2[4](
-  vec2(0.0, 0.0),
-  vec2(0.8, 0.0),
-  vec2(0.8, 0.8),
-  vec2(0.0, 0.8)
-);
-
-const vec4 palette[22] = vec4[22](
-  vec4(0.0, 0.100, 0.800, 1),
-  vec4(0.0, 0.095, 0.760, 1),
-  vec4(0.0, 0.090, 0.720, 1),
-  vec4(0.0, 0.085, 0.680, 1),
-  vec4(0.0, 0.080, 0.640, 1),
-  vec4(0.0, 0.075, 0.600, 1),
-  vec4(0.0, 0.070, 0.560, 1),
-  vec4(0.0, 0.065, 0.520, 1),
-  vec4(0.0, 0.060, 0.480, 1),
-  vec4(0.0, 0.055, 0.440, 1),
-  vec4(0.0, 0.050, 0.400, 1),
-  vec4(0.0, 0.045, 0.360, 1),
-  vec4(0.0, 0.040, 0.320, 1),
-  vec4(0.0, 0.035, 0.280, 1),
-  vec4(0.0, 0.030, 0.240, 1),
-  vec4(0.0, 0.025, 0.200, 1),
-  vec4(0.0, 0.020, 0.160, 1),
-  vec4(0.0, 0.015, 0.120, 1),
-  vec4(0.0, 0.010, 0.080, 1),
-  vec4(0.0, 0.005, 0.040, 1),
-  vec4(0, 0.0125, 0.1, 1   ),
-  vec4(1, 1, 1, 1          )
-);
-
-void main()
-{
-  int i = int(aColor);
-  OutColor = palette[i + 20];
-
-  vec2 position = (VertexPositions[gl_VertexID] * cellSide + aTranslation);
-  gl_Position = projection * vec4(position, 0, 1);
-}
-)";
-
-std::string_view GContext::FRAGMENT_SHADER = R"(#version 410 core
-
-in vec4 OutColor;
-
-out vec4 FragColor;
-
-void main()
-{
-FragColor = OutColor;
-}
-)";
-=======
 #include "../generated/Shader.frag.hpp"
 const u8* GContext::FRAGMENT_SHADER = Shader_frag;
 const u64 GContext::FRAGMENT_SHADER_SIZE = Shader_frag_len;
 
->>>>>>> sdl_gpu
