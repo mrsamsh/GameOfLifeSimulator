@@ -35,27 +35,34 @@ endfunction()
 
 function(add_spv_shader_library libID libName)
   set(SHADERS_DIR ${CMAKE_BINARY_DIR}/Shaders/SPIRV)
-  set(libName ${SHADERS_DIR}/${libName}.spv)
   foreach(file ${ARGN})
     cmake_path(GET file STEM filename)
     string(LENGTH "${filename}" filenameLength)
     math(EXPR start_index "${filenameLength} - 4")
     string(SUBSTRING "${filename}" ${start_index} 4 shaderType)
+    set(targetShader ${SHADERS_DIR}/${libName}.${shaderType}.spv)
     if("${shaderType}" STREQUAL "vert")
       add_custom_command(
-        OUTPUT ${libName}
+        OUTPUT ${targetShader}
         DEPENDS ${CMAKE_SOURCE_DIR}/${file}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-        COMMAND glslc -DUSING_GLSLC=1 -fshader-stage="${shaderType}" -fentry-point"VSmain" -c ${CMAKE_SOURCE_DIR}/${file} -o ${libName}
+        COMMAND glslc -DUSING_GLSLC=1 -fshader-stage=${shaderType} -fentry-point=VSmain -c ${CMAKE_SOURCE_DIR}/${file} -o ${targetShader}
         COMMENT "Compiling ${shaderType} shader"
         VERBATIM
       )
     elseif("${shaderType}" STREQUAL "frag")
+      add_custom_command(
+        OUTPUT ${targetShader}
+        DEPENDS ${CMAKE_SOURCE_DIR}/${file}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
+        COMMAND glslc -DUSING_GLSLC=1 -fshader-stage=${shaderType} -fentry-point=FSmain -c ${CMAKE_SOURCE_DIR}/${file} -o ${targetShader}
+        COMMENT "Compiling ${shaderType} shader"
+        VERBATIM
+      )
     else()
       message(FATAL_ERROR "Unknown shader type in ${file}, naming convention: name should end with vert or frag")
     endif()
-    list(APPEND compiledShaders ${libName})
+    list(APPEND compiledShaders ${targetShader})
   endforeach()
-  message("From here: ${compiledShaders}")
   set("${libID}" ${compiledShaders} PARENT_SCOPE)
 endfunction()

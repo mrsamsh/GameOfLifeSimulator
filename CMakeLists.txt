@@ -15,7 +15,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 set(TargetApp GameOfLife)
 
 include(CompileShaders.cmake)
-set_shader_type(METAL)
 
 # add_metal_shader_library(SHADER Shader
 #   shaders/default_vert.metal
@@ -23,8 +22,8 @@ set_shader_type(METAL)
 # )
 
 add_spv_shader_library(SHADER Shader
-  shaders/default_vert.metal
-  shaders/default_frag.metal
+  shaders/default_vert.hlsl
+  shaders/default_frag.hlsl
 )
 
 set(GENERATED_HEADERS
