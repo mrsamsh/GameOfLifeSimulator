@@ -16,15 +16,14 @@ set(TargetApp GameOfLife)
 
 include(CompileShaders.cmake)
 
-# add_metal_shader_library(SHADER Shader
-#   shaders/default_vert.metal
-#   shaders/default_frag.metal
-# )
+set_shader_type(SPIRV)
 
-add_spv_shader_library(SHADER Shader
+add_shader_library(SHADER Shader
   shaders/default_vert.hlsl
   shaders/default_frag.hlsl
 )
+
+
 
 set(GENERATED_HEADERS
   ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
@@ -69,8 +68,6 @@ add_executable(${TargetApp}
   ${GENERATED_HEADERS}
   ${SHADER}
 )
-
-message("sh: ${SHADER}")
 
 # set(TargetSpecificLibs "")
 

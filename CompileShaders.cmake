@@ -33,6 +33,40 @@ function(add_metal_shader_library libID libName)
   set("${libID}" ${SHADERS_DIR}/${libName} PARENT_SCOPE)
 endfunction()
 
+function(add_dxil_shader_library libID libName)
+  set(SHADERS_DIR ${CMAKE_BINARY_DIR}/Shaders/DXIL)
+  foreach(file ${ARGN})
+    cmake_path(GET file STEM filename)
+    string(LENGTH "${filename}" filenameLength)
+    math(EXPR start_index "${filenameLength} - 4")
+    string(SUBSTRING "${filename}" ${start_index} 4 shaderType)
+    set(targetShader ${SHADERS_DIR}/${libName}.${shaderType}.dxil)
+    if("${shaderType}" STREQUAL "vert")
+      add_custom_command(
+        OUTPUT ${targetShader}
+        DEPENDS ${CMAKE_SOURCE_DIR}/${file}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
+        COMMAND dxc.exe -T vs_6_0 -Fo ${targetShader} -E VSmain ${CMAKE_SOURCE_DIR}/${file}
+        COMMENT "Compiling ${shaderType} shader"
+        VERBATIM
+      )
+    elseif("${shaderType}" STREQUAL "frag")
+      add_custom_command(
+        OUTPUT ${targetShader}
+        DEPENDS ${CMAKE_SOURCE_DIR}/${file}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
+        COMMAND dxc.exe -T ps_6_0 -Fo ${targetShader} -E FSmain ${CMAKE_SOURCE_DIR}/${file}
+        COMMENT "Compiling ${shaderType} shader"
+        VERBATIM
+      )
+    else()
+      message(FATAL_ERROR "Unknown shader type in ${file}, naming convention: name should end with vert or frag")
+    endif()
+    list(APPEND compiledShaders ${targetShader})
+  endforeach()
+  set("${libID}" ${compiledShaders} PARENT_SCOPE)
+endfunction()
+
 function(add_spv_shader_library libID libName)
   set(SHADERS_DIR ${CMAKE_BINARY_DIR}/Shaders/SPIRV)
   foreach(file ${ARGN})
@@ -66,3 +100,14 @@ function(add_spv_shader_library libID libName)
   endforeach()
   set("${libID}" ${compiledShaders} PARENT_SCOPE)
 endfunction()
+
+macro(add_shader_library libID libName)
+  if("${SHADER_TYPE}" STREQUAL "METAL")
+    add_metal_shader_library(${libID} ${libName} ${ARGN})
+  elseif("${SHADER_TYPE}" STREQUAL "SPIRV")
+    add_spv_shader_library(${libID} ${libName} ${ARGN})
+  elseif("${SHADER_TYPE}" STREQUAL "DXIL")
+    add_dxil_shader_library(${libID} ${libName} ${ARGN})
+  endif()
+endmacro()
+
