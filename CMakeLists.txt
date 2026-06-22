@@ -2,9 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(GOLRenderer)
 
-add_subdirectory(libs/logging)
 add_subdirectory(libs/mathlib)
-add_subdirectory(libs/file)
 
 find_package(SDL3 REQUIRED)
 
@@ -54,7 +52,6 @@ endif()
 target_link_libraries(${TargetApp}
   PRIVATE
     SDL3::SDL3
-    log
     Math
     ${TargetSpecificLibs}
 )
