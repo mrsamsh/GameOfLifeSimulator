@@ -1,3 +1,6 @@
+set(SHADER_TYPE "METAL" CACHE STRING "Select shader type")
+set_property(CACHE SHADER_TYPE PROPERTY STRINGS "METAL" "SPIRV" "DXIL")
+
 function(set_shader_type type)
   if("${type}" STREQUAL "METAL" OR "${type}" STREQUAL "SPIRV" OR "${type}" STREQUAL "DXIL")
     set(SHADER_TYPE ${type} PARENT_SCOPE)
@@ -108,6 +111,8 @@ macro(add_shader_library libID libName)
     add_spv_shader_library(${libID} ${libName} ${ARGN})
   elseif("${SHADER_TYPE}" STREQUAL "DXIL")
     add_dxil_shader_library(${libID} ${libName} ${ARGN})
+  else()
+    message(FATAL_ERROR "Shader type is not specified. Set by calling (set_shader_type).")
   endif()
 endmacro()
 

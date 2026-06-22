@@ -16,14 +16,10 @@ set(TargetApp GameOfLife)
 
 include(CompileShaders.cmake)
 
-set_shader_type(SPIRV)
-
 add_shader_library(SHADER Shader
   shaders/default_vert.hlsl
   shaders/default_frag.hlsl
 )
-
-
 
 set(GENERATED_HEADERS
   ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
