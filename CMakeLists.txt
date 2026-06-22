@@ -14,6 +14,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 
 set(TargetApp GameOfLife)
 
+include(CompileShaders.cmake)
+set_shader_type(METAL)
+
+# add_metal_shader_library(SHADER Shader
+#   shaders/default_vert.metal
+#   shaders/default_frag.metal
+# )
+
+add_spv_shader_library(SHADER Shader
+  shaders/default_vert.metal
+  shaders/default_frag.metal
+)
+
 set(GENERATED_HEADERS
   ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
   ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
@@ -55,7 +68,10 @@ endif()
 add_executable(${TargetApp}
   src/main.cpp
   ${GENERATED_HEADERS}
+  ${SHADER}
 )
+
+message("sh: ${SHADER}")
 
 # set(TargetSpecificLibs "")
 
