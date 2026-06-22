@@ -1,1 +1,7 @@
 compile_commands.json
+shaders/*.hpp
+shaders/*.dxil
+shaders/*.spv
+shaders/*.air
+shaders/*.metallib
+generated/

@@ -22,8 +22,8 @@ class Angle;
 namespace literals
 {
 
-  constexpr math::Angle operator""_deg(u64 const);
-  constexpr math::Angle operator""_rad(u64 const);
+  constexpr math::Angle operator""_deg(unsigned long long const);
+  constexpr math::Angle operator""_rad(unsigned long long const);
   constexpr math::Angle operator""_deg(f128 const);
   constexpr math::Angle operator""_rad(f128 const);
 
@@ -175,8 +175,8 @@ private:
   friend inline constexpr Angle degrees(f64 const);
   friend inline constexpr Angle radians(f64 const);
 
-  friend constexpr Angle literals::operator""_deg(u64);
-  friend constexpr Angle literals::operator""_rad(u64);
+  friend constexpr Angle literals::operator""_deg(unsigned long long);
+  friend constexpr Angle literals::operator""_rad(unsigned long long);
   friend constexpr Angle literals::operator""_deg(f128);
   friend constexpr Angle literals::operator""_rad(f128);
 };
@@ -197,13 +197,13 @@ namespace literals
 {
 
   [[nodiscard]] constexpr
-  math::Angle operator""_deg(u64 const d)
+  math::Angle operator""_deg(unsigned long long const d)
   {
     return math::Angle(d);
   }
 
   [[nodiscard]] constexpr
-  math::Angle operator""_rad(u64 const r)
+  math::Angle operator""_rad(unsigned long long const r)
   {
     return math::Angle(r * math::Angle::ToDegrees);
   }
