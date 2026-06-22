@@ -409,11 +409,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     updateCamera(context);
   }
 
-  // update here
-
-  // draw here
   // first upload pass
-  
   void* map = SDL_MapGPUTransferBuffer(context.device, context.cell_transfer_buffer, false);
   memcpy(map, context.pixels.data(), context.pixels.ByteCapacity());
   SDL_UnmapGPUTransferBuffer(context.device, context.cell_transfer_buffer);
@@ -441,6 +437,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
   SDL_EndGPUCopyPass(copy_pass);
 
+  // then render pass
   SDL_GPUTexture* swapchain_texture;
   u32 width, height;
   SDL_WaitAndAcquireGPUSwapchainTexture(
@@ -492,14 +489,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   if (updating)
   {
     calculateNext(context.current_cells->data(), context.next_cells->data());
-  }
-  std::println("update elapsed: {} ms", (SDL_GetTicksNS() - start) * 1.e-6);
-
-
-  if (updating)
     context.swap_cells();
-  // if (elapsed < Delta)
-  //   SDL_DelayPrecise((Delta - elapsed).asNanoseconds());
+  }
 
   context.frame_counter++;
   return SDL_APP_CONTINUE;
