@@ -4,3 +4,4 @@ shaders/*.dxil
 shaders/*.spv
 shaders/*.air
 shaders/*.metallib
+generated/

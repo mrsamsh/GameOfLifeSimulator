@@ -14,58 +14,38 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 
 set(TargetApp GameOfLife)
 
+add_custom_command(
+  OUTPUT  ${CMAKE_SOURCE_DIR}/compile_commands.json
+  DEPENDS ${CMAKE_BINARY_DIR}/compile_commands.json
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${CMAKE_SOURCE_DIR}/compile_commands.json"
+  COMMENT "Copying compile_commands"
+)
+
 include(CompileShaders.cmake)
 
-add_shader_library(SHADER Shader
-  shaders/default_vert.hlsl
-  shaders/default_frag.hlsl
-)
-
-set(GENERATED_HEADERS
-  ${CMAKE_SOURCE_DIR}/shaders/default_vert.hpp
-  ${CMAKE_SOURCE_DIR}/shaders/default_frag.hpp
-)
-
-if(WIN32)
-  add_custom_command(
-    OUTPUT ${GENERATED_HEADERS}
-    COMMAND cmd /c "${CMAKE_SOURCE_DIR}/shaders/compile_dx_shaders.bat"
-    DEPENDS
-      ${CMAKE_SOURCE_DIR}/shaders/default_vert.hlsl
-      ${CMAKE_SOURCE_DIR}/shaders/default_frag.hlsl
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
-    COMMENT "Compiling DX shaders"
+if(APPLE)
+  add_shader_library(SHADER Shader
+    shaders/default_vert.metal
+    shaders/default_frag.metal
   )
-elseif(LINUX)
-  add_custom_command(
-    OUTPUT ${GENERATED_HEADERS}
-    COMMAND bash "${CMAKE_SOURCE_DIR}/shaders/compile_spv_shaders.sh"
-    DEPENDS
-      ${CMAKE_SOURCE_DIR}/shaders/default_vert.hlsl
-      ${CMAKE_SOURCE_DIR}/shaders/default_frag.hlsl
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
-    COMMENT "Compiling SPIR-V shaders"
-  )
-elseif(APPLE)
-  add_custom_command(
-    OUTPUT ${GENERATED_HEADERS}
-    COMMAND bash "${CMAKE_SOURCE_DIR}/shaders/compile_metal_shaders.sh"
-    DEPENDS
-      ${CMAKE_SOURCE_DIR}/shaders/default_vert.metal
-      ${CMAKE_SOURCE_DIR}/shaders/default_frag.metal
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/shaders
-    COMMENT "Compiling Metal shaders"
+else()
+  add_shader_library(SHADER Shader
+    shaders/default_vert.hlsl
+    shaders/default_frag.hlsl
   )
 endif()
+
+generate_header_files(SHADER_HEADERS ${CMAKE_SOURCE_DIR}/generated ${SHADER})
 
 # files to compile for executable
 add_executable(${TargetApp}
   src/main.cpp
-  ${GENERATED_HEADERS}
-  ${SHADER}
+  ${SHADER_HEADERS}
+  compile_commands.json
 )
-
-# set(TargetSpecificLibs "")
 
 if(WIN32)
   set(TargetSpecificLibs stdc++exp)
@@ -92,14 +72,6 @@ target_compile_features(${TargetApp}
     cxx_std_23
 )
 
-add_custom_target(CopyCompileCommands ALL
-  COMMAND
-    ${CMAKE_COMMAND} -E copy
-      "${CMAKE_BINARY_DIR}/compile_commands.json"
-      "${CMAKE_SOURCE_DIR}/compile_commands.json"
-    COMMENT "Copying compile_commands"
-)
-
 if(APPLE)
 set_target_properties(${TargetApp}
 PROPERTIES
@@ -115,4 +87,3 @@ target_compile_definitions(${TargetApp}
   PUBLIC $<$<CONFIG:Debug>:ASSERTION_ENABLED;DEBUG>
 )
 
-add_dependencies(${TargetApp} CopyCompileCommands)

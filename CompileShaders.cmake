@@ -10,30 +10,26 @@ function(set_shader_type type)
 endfunction()
 
 function(add_metal_shader_library libID libName)
-  set(airFiles)
-  set(libName "${libName}.metallib")
   set(SHADERS_DIR ${CMAKE_BINARY_DIR}/Shaders/Metal)
   foreach(file ${ARGN})
-    cmake_path(GET file STEM airFilename)
-    set(airFilename "${airFilename}.air")
+    cmake_path(GET file STEM filename)
+    string(LENGTH "${filename}" filenameLength)
+    math(EXPR start_index "${filenameLength} - 4")
+    string(SUBSTRING "${filename}" ${start_index} 4 shaderType)
+    set(airFilename "${SHADERS_DIR}/${filename}.air")
+    set(targetShader ${SHADERS_DIR}/${libName}.${shaderType}.metallib)
     add_custom_command(
-      OUTPUT ${SHADERS_DIR}/${airFilename}
+      OUTPUT ${targetShader}
       DEPENDS ${CMAKE_SOURCE_DIR}/${file}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-      COMMAND xcrun -sdk macosx metal -c ${CMAKE_SOURCE_DIR}/${file} -o ${SHADERS_DIR}/${airFilename}
-      COMMENT "Compiling ${airFilename}"
+      COMMAND xcrun -sdk macosx metal -c ${CMAKE_SOURCE_DIR}/${file} -o ${airFilename}
+      COMMAND xcrun -sdk macosx metal -o ${targetShader} ${airFilename}
+      COMMAND ${CMAKE_COMMAND} -E rm ${airFilename}
+      COMMENT "Compiling ${shaderType} shader"
       VERBATIM
     )
-    list(APPEND airFiles "${SHADERS_DIR}/${airFilename}")
+    list(APPEND compiledShaders "${targetShader}")
   endforeach()
-  add_custom_command(
-    OUTPUT ${SHADERS_DIR}/${libName}
-    DEPENDS "${airFiles}"
-    COMMAND xcrun -sdk macosx metal -o ${SHADERS_DIR}/${libName} ${airFiles}
-    COMMENT "Linking Metal library ${libName}"
-    VERBATIM
-  )
-  set("${libID}" ${SHADERS_DIR}/${libName} PARENT_SCOPE)
+  set("${libID}" ${compiledShaders} PARENT_SCOPE)
 endfunction()
 
 function(add_dxil_shader_library libID libName)
@@ -116,3 +112,20 @@ macro(add_shader_library libID libName)
   endif()
 endmacro()
 
+function(generate_header_files genName genDir)
+  foreach(file ${ARGN})
+    cmake_path(GET file FILENAME filename)
+    cmake_path(REMOVE_EXTENSION filename LAST_ONLY)
+    set(targetHeader ${genDir}/${filename}.hpp)
+    add_custom_command(
+      OUTPUT ${targetHeader}
+      DEPENDS ${file}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${genDir}
+      COMMAND xxd -n ${filename} -i ${file} ${targetHeader}
+      COMMENT "Generating header for ${filename}"
+      VERBATIM
+    )
+    list(APPEND generatedHeaders "${targetHeader}")
+  endforeach()
+  set("${genName}" ${generatedHeaders} PARENT_SCOPE)
+endfunction()

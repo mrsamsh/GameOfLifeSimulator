@@ -589,11 +589,11 @@ void toggleFullScreen(GContext& context)
   SDL_SetWindowFullscreen(context.window, !(flags & SDL_WINDOW_FULLSCREEN));
 }
 
-#include "../shaders/default_vert.hpp"
-const u8* GContext::VERTEX_SHADER = default_vert;
-const u64 GContext::VERTEX_SHADER_SIZE = default_vert_len;
+#include "../generated/Shader.vert.hpp"
+const u8* GContext::VERTEX_SHADER = Shader_vert;
+const u64 GContext::VERTEX_SHADER_SIZE = Shader_vert_len;
 
-#include "../shaders/default_frag.hpp"
-const u8* GContext::FRAGMENT_SHADER = default_frag;
-const u64 GContext::FRAGMENT_SHADER_SIZE = default_frag_len;
+#include "../generated/Shader.frag.hpp"
+const u8* GContext::FRAGMENT_SHADER = Shader_frag;
+const u64 GContext::FRAGMENT_SHADER_SIZE = Shader_frag_len;
 
